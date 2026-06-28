@@ -1,0 +1,1532 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>ウボンゴ3D スター制限モード対応 修正版</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@700&family=M+PLUS+Rounded+1c:wght@700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #fffbe3;
+      font-family: 'Hiragino Maru Gothic Pro', 'Meiryo', 'Arial Rounded MT Bold', 'Noto Sans JP', 'Yu Gothic', sans-serif;
+    }
+
+    /* ===== ヘッダーパネル（上固定） ===== */
+    #header-panel {
+      position: relative;
+      z-index: 20;
+      background: #fffbe3;
+      padding: 6px 10px 4px;
+      border-bottom: 2px solid #e8d97a;
+    }
+
+    #init-message {
+      font-size: 1.69em; /* 1.3em × 1.3倍 */
+      color: #7B5EA7; /* 落ち着きのある紫 */
+      font-weight: bold;
+      font-family: 'M PLUS Rounded 1c', 'Hiragino Maru Gothic Pro', 'Noto Sans JP', 'Yu Gothic', sans-serif;
+      text-align: center;
+      letter-spacing: 3px;
+      margin: 4px 0 6px;
+      text-shadow: 1px 2px 6px #e8d7f7, 0 1px 0 #fff;
+      -webkit-text-stroke: 0.5px #fffbe3;
+    }
+
+    #all-clear-message {
+      display: none;
+      font-size: 1.5em;
+      color: #2962FF;
+      font-weight: bold;
+      text-align: center;
+      letter-spacing: 3px;
+      margin: 2px 0;
+      -webkit-text-stroke: 1px #fffbe3;
+    }
+
+    /* ★制限時間：ヘッダー内に収める */
+    #star-timer {
+      display: none;
+      font-size: 1.5em;
+      color: #1565c0;
+      font-family: "Arial Black", "Meiryo", sans-serif;
+      font-weight: bold;
+      text-align: center;
+      letter-spacing: 2px;
+      margin: 2px 0;
+      text-shadow: 0 0 6px #fff;
+    }
+
+    /* ===== コントロールパネル ===== */
+    #controls {
+      position: relative;
+      z-index: 10;
+      background: rgba(0,0,0,0.07);
+      color: #333;
+      padding: 6px 10px;
+      font-size: 1em;
+      font-weight: bold;
+      border-bottom: 1px solid #ddd;
+    }
+
+    #controls .ctrl-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 3px;
+      margin-bottom: 3px;
+    }
+
+    #controls button {
+      padding: 4px 8px;
+      font-size: 0.95em;
+      font-weight: bold;
+      border-radius: 5px;
+      border: 1px solid #aaa;
+      background: #fff;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    #controls button:active { background: #e0e0e0; }
+
+    #controls select {
+      padding: 3px 4px;
+      font-size: 0.95em;
+      border-radius: 5px;
+    }
+
+    #timer {
+      font-size: 1.2em;
+      color: #FFD600;
+      font-family: monospace;
+      font-weight: bold;
+      text-shadow: 1px 1px 4px #888;
+      margin-left: 6px;
+    }
+
+    #message { margin-left: 8px; color: #333; }
+
+    .dir-labels { font-weight: bold; color: #c07000; font-size: 0.88em; }
+    .smallnote  { font-size: 0.82em; color: #888; }
+    .blockcolors-sample span { margin-right: 4px; }
+    .star-option[disabled] { color: #888; }
+
+    /* ===== Canvasは残りの高さを使う ===== */
+    #myCanvas {
+      display: block;
+      width: 100%;
+    }
+
+    /* ===== スマホ対応 ===== */
+    @media screen and (max-width: 600px) {
+      #init-message  { font-size: 1em; }
+      #all-clear-message { font-size: 1.1em; }
+      #star-timer    { font-size: 1.2em; }
+      #controls      { font-size: 0.9em; }
+      #controls button { padding: 5px 7px; font-size: 0.88em; }
+    }
+
+    /* ===== ヘルプ・チュートリアルオーバーレイ ===== */
+    #help-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+    }
+    #help-overlay.show { display: flex; }
+    #help-box {
+      background: linear-gradient(135deg, #fff9e6 0%, #f3e8ff 100%);
+      border: 3px solid #b39ddb;
+      border-radius: 20px;
+      padding: 24px 32px;
+      max-width: 520px;
+      width: 92vw;
+      box-shadow: 0 8px 32px rgba(120,80,200,0.25);
+      position: relative;
+    }
+    #help-box h2 {
+      margin: 0 0 14px;
+      color: #7B5EA7;
+      font-family: 'M PLUS Rounded 1c', 'Hiragino Maru Gothic Pro', sans-serif;
+      font-size: 1.3em;
+      text-align: center;
+      letter-spacing: 2px;
+    }
+    #help-box table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.95em;
+    }
+    #help-box th {
+      background: #ede0ff;
+      color: #5c3d9e;
+      padding: 5px 10px;
+      text-align: left;
+      border-radius: 4px;
+    }
+    #help-box td {
+      padding: 5px 10px;
+      border-bottom: 1px solid #e8d7f7;
+      vertical-align: middle;
+    }
+    #help-box td:first-child {
+      font-family: monospace;
+      font-weight: bold;
+      color: #333;
+      white-space: nowrap;
+      font-size: 1.05em;
+    }
+    #help-box .section-label {
+      font-weight: bold;
+      color: #7B5EA7;
+      padding: 8px 10px 2px;
+      font-size: 0.88em;
+    }
+    #help-close {
+      position: absolute;
+      top: 12px; right: 16px;
+      background: none;
+      border: none;
+      font-size: 1.5em;
+      cursor: pointer;
+      color: #999;
+      line-height: 1;
+    }
+    #help-close:hover { color: #7B5EA7; }
+    #help-box .help-footer {
+      margin-top: 14px;
+      text-align: center;
+      font-size: 0.85em;
+      color: #999;
+    }
+    /* チュートリアル初回表示用のアニメ */
+    @keyframes helpSlideIn {
+      from { transform: translateY(-30px); opacity: 0; }
+      to   { transform: translateY(0);     opacity: 1; }
+    }
+    #help-box.animate { animation: helpSlideIn 0.35s ease-out; }
+
+    /* スワイプヒント（スマホ） */
+    #swipe-hint {
+      display: none;
+      position: absolute;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.45);
+      color: #fff;
+      font-size: 0.82em;
+      padding: 5px 14px;
+      border-radius: 20px;
+      pointer-events: none;
+      white-space: nowrap;
+      z-index: 10;
+    }
+    @media (pointer: coarse) {
+      #swipe-hint { display: block; }
+    }
+
+    /* ===== スコアボード ===== */
+    #scoreboard {
+      display: none;
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 300;
+      background: linear-gradient(135deg, #fff9e6 0%, #f3e8ff 100%);
+      border: 3px solid #b39ddb;
+      border-radius: 20px;
+      padding: 24px 32px;
+      max-width: 480px;
+      width: 92vw;
+      box-shadow: 0 8px 32px rgba(120,80,200,0.3);
+    }
+    #scoreboard h2 {
+      margin: 0 0 14px;
+      color: #7B5EA7;
+      font-family: 'M PLUS Rounded 1c','Hiragino Maru Gothic Pro',sans-serif;
+      font-size: 1.2em;
+      text-align: center;
+      letter-spacing: 2px;
+    }
+    #scoreboard table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9em;
+    }
+    #scoreboard th {
+      background: #ede0ff;
+      color: #5c3d9e;
+      padding: 5px 8px;
+      text-align: center;
+    }
+    #scoreboard td {
+      padding: 5px 8px;
+      border-bottom: 1px solid #e8d7f7;
+      text-align: center;
+    }
+    #scoreboard td:first-child { text-align: left; font-weight: bold; }
+    #scoreboard .total-row td {
+      font-weight: bold;
+      color: #7B5EA7;
+      font-size: 1.05em;
+      border-top: 2px solid #b39ddb;
+    }
+    #scoreboard-close {
+      position: absolute; top: 12px; right: 16px;
+      background: none; border: none;
+      font-size: 1.5em; cursor: pointer; color: #999; line-height: 1;
+    }
+    #scoreboard-close:hover { color: #7B5EA7; }
+    #scoreboard-backdrop {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.4);
+      z-index: 299;
+    }
+    #scoreboard-backdrop.show, #scoreboard.show { display: block; }
+
+    /* ===== クリア演出 ===== */
+    #clear-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      pointer-events: none;
+    }
+    #clear-overlay.show { display: block; }
+
+    /* 画面フラッシュ */
+    @keyframes flash {
+      0%   { background: rgba(255,255,255,0.85); }
+      40%  { background: rgba(255,255,255,0.4); }
+      100% { background: rgba(255,255,255,0); }
+    }
+    #clear-flash {
+      position: absolute;
+      inset: 0;
+      animation: flash 0.6s ease-out forwards;
+    }
+
+    /* クリアメッセージポップ */
+    @keyframes popIn {
+      0%   { transform: translate(-50%,-50%) scale(0.3); opacity: 0; }
+      60%  { transform: translate(-50%,-50%) scale(1.15); opacity: 1; }
+      80%  { transform: translate(-50%,-50%) scale(0.95); }
+      100% { transform: translate(-50%,-50%) scale(1); opacity: 1; }
+    }
+    @keyframes popOut {
+      0%   { transform: translate(-50%,-50%) scale(1); opacity: 1; }
+      100% { transform: translate(-50%,-50%) scale(0.5); opacity: 0; }
+    }
+    #clear-message-popup {
+      position: absolute;
+      top: 38%;
+      left: 50%;
+      transform: translate(-50%,-50%) scale(0);
+      background: linear-gradient(135deg, #fff9e6 0%, #f3e8ff 100%);
+      border: 3px solid #b39ddb;
+      border-radius: 20px;
+      padding: 22px 40px;
+      text-align: center;
+      box-shadow: 0 8px 32px rgba(120,80,200,0.25), 0 2px 8px rgba(0,0,0,0.12);
+      min-width: 220px;
+      opacity: 0;
+    }
+    #clear-message-popup.pop-in {
+      animation: popIn 0.55s cubic-bezier(.36,.07,.19,.97) forwards;
+    }
+    #clear-message-popup.pop-out {
+      animation: popOut 0.35s ease-in forwards;
+    }
+    #clear-message-popup .clear-title {
+      font-size: 2em;
+      font-weight: bold;
+      color: #7B5EA7;
+      font-family: 'M PLUS Rounded 1c', 'Hiragino Maru Gothic Pro', sans-serif;
+      letter-spacing: 3px;
+      text-shadow: 0 2px 8px #e8d7f7;
+    }
+    #clear-message-popup .clear-time {
+      font-size: 1.3em;
+      color: #333;
+      margin-top: 8px;
+      font-family: monospace;
+      font-weight: bold;
+    }
+    #clear-message-popup .clear-star {
+      font-size: 1.5em;
+      margin-top: 6px;
+      letter-spacing: 6px;
+    }
+
+    /* オールクリア専用 */
+    @keyframes allClearPulse {
+      0%, 100% { text-shadow: 0 0 16px #ffe066, 0 0 40px #ffb300; }
+      50%       { text-shadow: 0 0 32px #fff, 0 0 80px #ffcc00; }
+    }
+    #clear-message-popup.all-clear .clear-title {
+      color: #e65100;
+      animation: allClearPulse 1s infinite;
+    }
+  </style>
+</head>
+<body>
+<!-- クリア演出オーバーレイ -->
+<div id="clear-overlay">
+  <div id="clear-flash"></div>
+  <div id="clear-message-popup">
+    <div class="clear-title" id="clear-title-text">完成！</div>
+    <div class="clear-time" id="clear-time-text"></div>
+    <div class="clear-star" id="clear-star-text"></div>
+  </div>
+</div>
+
+<!-- ヘッダー：タイトル・制限時間・オールクリアメッセージ -->
+<div id="header-panel">
+  <div id="init-message">ブロックを組み合わせて立方体を完成させよ‼</div>
+  <div id="all-clear-message">オールクリア　あなたは天才です！</div>
+  <div id="star-timer">制限時間：00.0 秒</div>
+</div>
+
+<!-- コントロールパネル -->
+<div id="controls">
+  <div class="ctrl-row">
+    <button onclick="moveBlock(0,1,0)">上</button>
+    <button onclick="moveBlock(0,-1,0)">下</button>
+    <button onclick="moveBlockByLabel('A')">A方向</button>
+    <button onclick="moveBlockByLabel('B')">B方向</button>
+    <button onclick="moveBlockByLabel('C')">C方向</button>
+    <button onclick="moveBlockByLabel('D')">D方向</button>
+    <span class="dir-labels">A=+X｜B=+Z｜C=−X｜D=−Z</span>
+  </div>
+  <div class="ctrl-row">
+    <button onclick="rotateBlock('x',1)">X右回転</button>
+    <button onclick="rotateBlock('x',-1)">X左回転</button>
+    <button onclick="rotateBlock('y',1)">Y右回転</button>
+    <button onclick="rotateBlock('y',-1)">Y左回転</button>
+    <button onclick="rotateBlock('z',1)">Z右回転</button>
+    <button onclick="rotateBlock('z',-1)">Z左回転</button>
+    <select id="blocksel" onchange="selectBlock()"></select>
+  </div>
+  <div class="ctrl-row">
+    <span class="smallnote blockcolors-sample">
+      ブロック1＝<span style="color:#FFD600;">黄色</span>
+      ブロック2＝<span style="color:#21E5B6;">緑</span>
+      ブロック3＝<span style="color:#FF5ECD;">ピンク</span>
+      ブロック4＝<span style="color:#8C6EFF;">紫</span>
+      ブロック5＝<span style="color:#F49B3E;">オレンジ</span>
+      ブロック6＝<span style="color:#787878;">グレー</span>
+      ブロック7＝<span style="color:#A5FF55;">黄緑</span>
+    </span>
+    <span class="smallnote">※X回転＝前後に傾ける　Y回転＝左右に回す　Z回転＝横に倒す</span>
+  </div>
+  <div class="ctrl-row">
+    <button onclick="setCam(0)">前</button>
+    <button onclick="setCam(1)">右</button>
+    <button onclick="setCam(2)">奥</button>
+    <button onclick="setCam(3)">上</button>
+    <span>カメラ切替</span>
+    &nbsp;｜&nbsp;
+    レベル：
+    <select id="patternsel" onchange="changePattern()">
+      <option value="0">レベル1</option>
+      <option value="0star" class="star-option" disabled>レベル1★</option>
+      <option value="1">レベル2</option>
+      <option value="1star" class="star-option" disabled>レベル2★</option>
+      <option value="2">レベル3</option>
+      <option value="2star" class="star-option" disabled>レベル3★</option>
+      <option value="3">レベル4</option>
+      <option value="3star" class="star-option" disabled>レベル4★</option>
+      <option value="4">レベル5</option>
+      <option value="4star" class="star-option" disabled>レベル5★</option>
+      <option value="5">レベル6</option>
+      <option value="5star" class="star-option" disabled>レベル6★</option>
+      <option value="6">レベル7</option>
+      <option value="6star" class="star-option" disabled>レベル7★</option>
+      <option value="7">レベル8</option>
+      <option value="7star" class="star-option" disabled>レベル8★</option>
+      <option value="8">レベル9</option>
+      <option value="8star" class="star-option" disabled>レベル9★</option>
+      <option value="9">レベル10</option>
+      <option value="9star" class="star-option" disabled>レベル10★</option>
+    </select>
+    <button onclick="startGame()" id="startBtn">スタート</button>
+    <span id="timer">00.0</span>
+    <span id="message"></span>
+    <button onclick="resetBlocks()" style="margin-left:auto;">リセット</button>
+    <button onclick="openHelp()" title="操作ガイド" style="margin-left:6px; background:#ede0ff; border-color:#b39ddb; color:#5c3d9e;">？</button>
+    <button onclick="openScoreboard()" title="スコアボード" style="margin-left:4px; background:#fff9e6; border-color:#e8d97a; color:#7B5EA7;">🏆</button>
+  </div>
+</div>
+
+<!-- スコアボード -->
+<div id="scoreboard-backdrop" onclick="closeScoreboard()"></div>
+<div id="scoreboard">
+  <button id="scoreboard-close" onclick="closeScoreboard()">✕</button>
+  <h2>🏆 スコアボード</h2>
+  <table id="scoreboard-table">
+    <tr>
+      <th>レベル</th>
+      <th>タイム</th>
+      <th>スコア</th>
+      <th>評価</th>
+    </tr>
+  </table>
+</div>
+
+<!-- ヘルプオーバーレイ -->
+<div id="help-overlay">
+  <div id="help-box">
+    <button id="help-close" onclick="closeHelp()">✕</button>
+    <h2>🎮 操作ガイド</h2>
+    <table>
+      <tr><th>キー</th><th>動作</th></tr>
+      <tr><td colspan="2" class="section-label">── ブロック移動 ──</td></tr>
+      <tr><td>W / S</td><td>前後に移動（Z方向）</td></tr>
+      <tr><td>A / D</td><td>左右に移動（X方向）</td></tr>
+      <tr><td>Q / E</td><td>上下に移動（Y方向）</td></tr>
+      <tr><td colspan="2" class="section-label">── ブロック回転 ──</td></tr>
+      <tr><td>J / L</td><td>X軸で回転（前後に傾ける）</td></tr>
+      <tr><td>I / K</td><td>Y軸で回転（左右に回す）</td></tr>
+      <tr><td>U / O</td><td>Z軸で回転（横に倒す）</td></tr>
+      <tr><td colspan="2" class="section-label">── ブロック選択 ──</td></tr>
+      <tr><td>1 〜 6</td><td>ブロックを番号で選択</td></tr>
+      <tr><td>Tab</td><td>次のブロックに切替</td></tr>
+      <tr><td colspan="2" class="section-label">── スマホ操作 ──</td></tr>
+      <tr><td>スワイプ</td><td>上下左右にブロック移動</td></tr>
+      <tr><td>2本指タップ</td><td>Y軸回転（左右に回す）</td></tr>
+      <tr><td>3本指タップ</td><td>次のブロックに切替</td></tr>
+    </table>
+    <div class="help-footer">画面をタップするか ✕ で閉じる</div>
+  </div>
+</div>
+
+<div style="position:relative;">
+  <canvas id="myCanvas"></canvas>
+  <div id="swipe-hint">👆 スワイプで移動　2本指タップで回転</div>
+</div>
+<script>
+// --- 問題セット（元まま、ここは省略不可。コード省略なし） ---
+const blockPatternList = [
+// Lv1: 3x3x3, 3ブロック（入門）
+[[[0,0,0],[1,0,0],[2,0,0],[0,1,0],[1,1,0],[2,1,0],[0,2,0],[1,2,0],[2,2,0]],
+ [[0,0,1],[1,0,1],[2,0,1],[0,1,1],[1,1,1],[2,1,1],[0,2,1],[1,2,1],[2,2,1]],
+ [[0,0,2],[1,0,2],[2,0,2],[0,1,2],[1,1,2],[2,1,2],[0,2,2],[1,2,2],[2,2,2]]],
+// Lv2: 3x3x3, 3ブロック（簡単）
+[[[0,0,0],[1,0,0],[2,0,0],[0,1,0],[1,1,0],[2,1,0],[0,2,0],[1,2,0],[2,2,0]],
+ [[0,0,1],[0,1,1],[0,2,1],[1,0,1],[1,1,1],[2,0,1],[2,1,1],[0,0,2],[0,1,2]],
+ [[1,2,1],[2,2,1],[0,2,2],[1,0,2],[1,1,2],[1,2,2],[2,0,2],[2,1,2],[2,2,2]]],
+// Lv3: 3x3x3, 3ブロック（普通）
+[[[0,0,0],[0,0,1],[0,0,2],[0,1,2],[0,2,2],[1,2,2],[2,2,2],[2,2,1],[2,2,0]],
+ [[1,0,0],[1,0,1],[1,0,2],[2,0,0],[2,1,0],[2,1,1],[2,1,2],[1,1,2],[1,1,1]],
+ [[0,1,0],[1,1,0],[0,2,0],[0,1,1],[1,2,0],[1,2,1],[0,2,1],[2,0,1],[2,0,2]]],
+// Lv4: 3x3x3, 4ブロック（やや難）
+[[[0,0,0],[0,1,0],[0,2,0],[1,0,0],[2,0,0],[0,0,1],[0,0,2]],
+ [[1,1,0],[2,1,0],[1,2,0],[2,2,0],[1,0,1],[2,0,1],[2,0,2]],
+ [[0,1,1],[0,2,1],[0,1,2],[0,2,2],[1,0,2],[1,1,1],[2,1,1]],
+ [[1,1,2],[1,2,1],[1,2,2],[2,1,2],[2,2,1],[2,2,2]]],
+// Lv5: 3x3x3, 4ブロック（難しい）
+[[[0,0,0],[1,0,0],[2,0,0],[2,1,0],[2,2,0],[2,0,1],[2,0,2]],
+ [[0,1,0],[0,2,0],[1,1,0],[1,2,0],[0,0,1],[0,0,2],[0,1,1]],
+ [[1,0,1],[1,0,2],[2,1,1],[0,2,1],[1,1,1],[0,1,2],[1,1,2]],
+ [[0,2,2],[1,2,1],[1,2,2],[2,1,2],[2,2,1],[2,2,2]]],
+// Lv6: 4x4x4, 4ブロック（帯状）
+[[[0,0,0],[1,0,0],[2,0,0],[3,0,0],[0,1,0],[1,1,0],[2,1,0],[3,1,0],[0,0,1],[1,0,1],[2,0,1],[3,0,1],[0,0,2],[1,0,2],[0,0,3],[1,0,3]],
+ [[0,2,0],[1,2,0],[2,2,0],[3,2,0],[0,3,0],[1,3,0],[2,3,0],[3,3,0],[0,1,1],[1,1,1],[2,1,1],[3,1,1],[0,2,1],[1,2,1],[2,0,2],[3,0,2]],
+ [[2,2,1],[3,2,1],[0,3,1],[1,3,1],[2,3,1],[3,3,1],[0,1,2],[1,1,2],[2,1,2],[3,1,2],[0,2,2],[1,2,2],[2,2,2],[3,2,2],[0,3,2],[1,3,2]],
+ [[2,3,2],[3,3,2],[0,1,3],[1,1,3],[2,1,3],[3,1,3],[0,2,3],[1,2,3],[2,2,3],[3,2,3],[0,3,3],[1,3,3],[2,3,3],[3,3,3],[2,0,3],[3,0,3]]],
+// Lv7: 4x4x4, 5ブロック（L字柱）
+[[[0,0,0],[1,0,0],[2,0,0],[3,0,0],[0,1,0],[0,2,0],[0,3,0],[0,0,1],[0,0,2],[0,0,3],[1,1,0],[2,1,0]],
+ [[3,1,0],[3,2,0],[3,3,0],[1,2,0],[2,2,0],[1,3,0],[2,3,0],[0,1,1],[0,2,1],[0,3,1],[0,1,2],[0,2,2],[0,3,2]],
+ [[1,0,1],[2,0,1],[3,0,1],[1,0,2],[2,0,2],[3,0,2],[1,0,3],[2,0,3],[3,0,3],[1,1,1],[2,1,1],[3,1,1],[0,3,3]],
+ [[1,1,2],[2,1,2],[3,1,2],[1,2,1],[2,2,1],[3,2,1],[1,3,1],[2,3,1],[3,3,1],[0,1,3],[0,2,3],[1,1,3],[2,1,3]],
+ [[1,2,2],[1,2,3],[1,3,2],[1,3,3],[2,2,2],[2,2,3],[2,3,2],[2,3,3],[3,1,3],[3,2,2],[3,2,3],[3,3,2],[3,3,3]]],
+// Lv8: 4x4x4, 6ブロック（外周螺旋+内部複雑）
+[[[0,0,0],[1,0,0],[2,0,0],[3,0,0],[3,1,0],[3,2,0],[3,3,0],[2,3,0],[1,3,0],[0,3,0]],
+ [[0,2,0],[0,1,0],[1,1,0],[2,1,0],[1,2,0],[2,2,0],[0,0,1],[1,0,1],[2,0,1],[3,0,1],[3,1,1]],
+ [[3,2,1],[3,3,1],[2,3,1],[1,3,1],[0,3,1],[0,2,1],[0,1,1],[0,0,2],[1,0,2],[2,0,2],[3,0,2]],
+ [[3,1,2],[3,2,2],[3,3,2],[2,3,2],[1,3,2],[0,3,2],[0,2,2],[0,1,2],[0,0,3],[1,0,3],[2,0,3]],
+ [[3,0,3],[3,1,3],[3,2,3],[3,3,3],[2,3,3],[1,3,3],[0,3,3],[0,2,3],[0,1,3],[1,1,1],[2,1,1]],
+ [[1,1,2],[1,1,3],[1,2,1],[1,2,2],[1,2,3],[2,1,2],[2,1,3],[2,2,1],[2,2,2],[2,2,3]]],
+// Lv9: 4x4x4, 6ブロック（超難しい）
+[[[0,0,0],[0,0,1],[0,0,2],[0,1,0],[0,1,1],[1,0,0],[1,1,0],[0,2,0],[1,2,0],[0,3,0]],
+ [[0,0,3],[1,0,3],[1,1,3],[0,1,3],[0,2,3],[1,2,3],[0,3,3],[1,3,3],[1,3,2],[1,3,1]],
+ [[3,0,0],[3,1,0],[2,1,0],[2,0,0],[2,0,1],[2,0,2],[2,0,3],[3,0,3],[3,0,2],[3,0,1]],
+ [[3,3,3],[3,2,3],[3,1,3],[2,1,3],[2,2,3],[2,3,3],[2,3,2],[2,3,1],[3,3,1],[3,3,2]],
+ [[1,2,1],[1,2,2],[1,1,1],[1,0,1],[1,1,2],[2,1,1],[2,1,2],[2,2,1],[2,2,2],[3,2,0]],
+ [[0,1,2],[0,2,1],[0,2,2],[0,3,1],[0,3,2],[1,0,2],[1,3,0],[2,2,0],[2,3,0],[3,1,1],[3,1,2],[3,2,1],[3,2,2],[3,3,0]]],
+// Lv10: 4x4x4, 7ブロック（最高難度）
+[[[0,0,0],[1,0,0],[2,0,0],[3,0,0],[3,1,0],[3,0,1]],
+ [[0,1,0],[0,2,0],[0,3,0],[1,3,0],[2,3,0],[3,3,0],[3,2,0],[0,0,1]],
+ [[1,0,1],[2,0,1],[0,1,1],[0,2,1],[0,3,1],[1,3,1],[2,3,1],[3,3,1],[3,3,2]],
+ [[3,0,2],[3,1,2],[3,2,2],[3,2,1],[3,1,1],[0,0,2],[1,0,2],[2,0,2],[0,1,2],[0,2,2]],
+ [[0,3,2],[1,3,2],[2,3,2],[0,0,3],[1,0,3],[2,0,3],[3,0,3],[0,1,3],[0,2,3],[0,3,3]],
+ [[1,3,3],[2,3,3],[3,3,3],[3,2,3],[3,1,3],[1,1,1],[2,1,1],[1,2,1]],
+ [[1,1,0],[1,1,2],[1,1,3],[1,2,0],[1,2,2],[1,2,3],[2,1,0],[2,1,2],[2,1,3],[2,2,0],[2,2,1],[2,2,2],[2,2,3]]]
+];
+
+const blockColors = [0xFFD600, 0x21E5B6, 0xFF5ECD, 0x8C6EFF, 0xF49B3E, 0x787878, 0xA5FF55, 0xFF8700];
+let cubeSize = 3;
+let blockDefs = blockPatternList[0];
+
+function getCubeSizeForLevel(idx){
+  return idx < 5 ? 3 : 4;
+}
+
+const yOffset = 2.1;
+const redLineY = -2.1;
+let levelStarClearTimes = Array(10).fill(null);
+let starLevelCleared = Array(10).fill(false);
+let isStarLevel = false;
+let starLevelIndex = null;
+let blockDropPos = 0;
+let dropAnimId = null;
+let dropSpeed = 0.0005;
+let gameOverReason = "";
+let redLineMesh = null;
+let blocks = [], activeBlock = 0;
+let timerStarted = false;
+let timerStartTime = 0;
+let timerStopTime = 0;
+let timerAnimId = null;
+
+let allClearFlag = false;
+
+// スコア記録（各レベルのベストスコアと星評価）
+// normalScores[i]  = {score, stars, time}  通常レベル
+// starScores[i]    = {score, stars, time}  ★レベル
+let normalScores = Array(10).fill(null);
+let starScores   = Array(10).fill(null);
+
+// ===== localStorage 保存・読み込み =====
+const LS_KEY = 'ubongo3d_save_v1';
+
+function saveProgress() {
+  try {
+    const data = {
+      normalScores,
+      starScores,
+      levelStarClearTimes,
+      starLevelCleared,
+      allClearFlag
+    };
+    localStorage.setItem(LS_KEY, JSON.stringify(data));
+  } catch(e) {
+    console.warn('保存失敗:', e);
+  }
+}
+
+function loadProgress() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    if (data.normalScores)        normalScores        = data.normalScores;
+    if (data.starScores)          starScores          = data.starScores;
+    if (data.levelStarClearTimes) levelStarClearTimes = data.levelStarClearTimes;
+    if (data.starLevelCleared)    starLevelCleared    = data.starLevelCleared;
+    if (data.allClearFlag)        allClearFlag        = data.allClearFlag;
+  } catch(e) {
+    console.warn('読み込み失敗:', e);
+  }
+}
+
+function clearProgress() {
+  if (!confirm('セーブデータを全て削除しますか？')) return;
+  localStorage.removeItem(LS_KEY);
+  normalScores        = Array(10).fill(null);
+  starScores          = Array(10).fill(null);
+  levelStarClearTimes = Array(10).fill(null);
+  starLevelCleared    = Array(10).fill(false);
+  allClearFlag        = false;
+  updateStarSelectUI();
+  alert('セーブデータを削除しました。');
+}
+
+// 起動時に読み込み
+loadProgress();
+
+function calcNormalScore(t){
+  // タイムが短いほど高得点（最大1000点）
+  const score = Math.max(0, Math.round(1000 - t * 10));
+  const stars = t <= 30 ? 3 : t <= 60 ? 2 : 1;
+  return { score, stars, time: t };
+}
+function calcStarScore(remain){
+  // 残り時間が多いほど高得点（最大1000点）
+  const score = Math.round(Math.min(1000, remain * 50));
+  const stars = remain >= 15 ? 3 : remain >= 5 ? 2 : 1;
+  return { score, stars, time: remain };
+}
+function starsText(n){
+  return "★".repeat(n) + "☆".repeat(3 - n);
+}
+function totalScore(){
+  let sum = 0;
+  for(const s of normalScores) if(s) sum += s.score;
+  for(const s of starScores)   if(s) sum += s.score;
+  return sum;
+}
+
+const renderer = new THREE.WebGLRenderer({canvas:document.getElementById("myCanvas"),antialias:true});
+renderer.setClearColor(0xfffbe3);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(50,1,0.1,1000);
+function getCanvasHeight(){
+  let used = document.getElementById('header-panel').offsetHeight
+            + document.getElementById('controls').offsetHeight;
+  return Math.max(200, window.innerHeight - used);
+}
+function resizeRenderer(){
+  let w = window.innerWidth, h = getCanvasHeight();
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+resizeRenderer();
+const light = new THREE.DirectionalLight(0xffffff,0.8); light.position.set(13,23,20); scene.add(light);
+const amb = new THREE.AmbientLight(0xffffff,0.5); scene.add(amb);
+
+let blockMeshes = [];
+let cubeOutline = null;
+
+function drawOutlineCube(){
+  if(cubeOutline) scene.remove(cubeOutline);
+  let geo = new THREE.BoxGeometry(cubeSize,cubeSize,cubeSize);
+  let edges = new THREE.EdgesGeometry(geo);
+  let line = new THREE.LineSegments(edges,new THREE.LineBasicMaterial({color:0xbbb999}));
+  line.position.set(cubeSize/2, cubeSize/2 + yOffset, cubeSize/2);
+  cubeOutline=line; scene.add(line);
+}
+drawOutlineCube();
+function addDirectionLabels(){
+  if(window.dirLabels){
+    for(const l of window.dirLabels) scene.remove(l);
+  }
+  window.dirLabels = [];
+  const pos = cubeSize + 1.5;
+  const center = cubeSize/2;
+  const labels = [
+    {txt:'A', pos:[pos,center+yOffset,center]},
+    {txt:'B', pos:[center,center+yOffset,pos]},
+    {txt:'C', pos:[-1.5,center+yOffset,center]},
+    {txt:'D', pos:[center,center+yOffset,-1.5]}
+  ];
+  for(const l of labels){
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    ctx.font = "bold 48px 'Hiragino Maru Gothic Pro', 'Meiryo', 'Arial Rounded MT Bold', 'Noto Sans JP', 'Yu Gothic', 'sans-serif'";
+    ctx.fillStyle = "#5B2493";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(l.txt,32,32);
+    const texture = new THREE.CanvasTexture(canvas);
+    const mat = new THREE.SpriteMaterial({map: texture,transparent:true});
+    const sprite = new THREE.Sprite(mat);
+    sprite.position.set(...l.pos);
+    sprite.scale.set(0.8,0.8,0.8);
+    scene.add(sprite);
+    window.dirLabels.push(sprite);
+  }
+}
+addDirectionLabels();
+
+let axisHelperGroup = null; let currentAxis = 'x';
+function showFixedRotationAxis(axisName){
+  currentAxis = axisName;
+  if(axisHelperGroup) scene.remove(axisHelperGroup);
+  axisHelperGroup = new THREE.Group();
+  const c = cubeSize/2;
+  const len = cubeSize+2;
+  const axisColors = { x:'#FF3030', y:'#20DD60', z:'#395CFF' };
+  const axisColorsHex = { x:0xFF3030, y:0x20DD60, z:0x395CFF };
+  const axisLabel = {x:"X", y:"Y", z:"Z"};
+  const lines = [
+    {axis:'x', dir:[1,0,0], labelOffset:[1.07, 0.3, 0]},
+    {axis:'y', dir:[0,1,0], labelOffset:[0.20, 1.26, 0.10]},
+    {axis:'z', dir:[0,0,1], labelOffset:[0, 0.25, 1.05]}
+  ];
+  for(const l of lines){
+    let opac = (axisName===l.axis)?1.0: 0.25;
+    let mat = new THREE.LineBasicMaterial({color:axisColorsHex[l.axis], linewidth:6, opacity:opac, transparent:true, depthTest:false});
+    let start = new THREE.Vector3(c,c+yOffset,c).clone().addScaledVector(new THREE.Vector3(...l.dir),-len/2);
+    let end   = new THREE.Vector3(c,c+yOffset,c).clone().addScaledVector(new THREE.Vector3(...l.dir), len/2);
+    let geom = new THREE.BufferGeometry().setFromPoints([start,end]);
+    let line = new THREE.Line(geom, mat);
+    axisHelperGroup.add(line);
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    ctx.font = "bold 46px Arial";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillStyle = axisName===l.axis ? axisColors[l.axis] : axisColors[l.axis] + "77";
+    ctx.strokeStyle="#fff";
+    ctx.lineWidth=5;
+    ctx.strokeText(axisLabel[l.axis],32,36);
+    ctx.fillText(axisLabel[l.axis],32,36);
+    const texture = new THREE.CanvasTexture(canvas);
+    const mat2 = new THREE.SpriteMaterial({map: texture,transparent:true});
+    const label_pos = new THREE.Vector3(
+      c + l.labelOffset[0]*len,
+      c + yOffset + l.labelOffset[1]*len,
+      c + l.labelOffset[2]*len
+    );
+    const sprite = new THREE.Sprite(mat2);
+    sprite.position.copy(label_pos);
+    sprite.scale.set(0.85,0.85,0.85);
+    axisHelperGroup.add(sprite);
+  }
+  scene.add(axisHelperGroup);
+}
+function clearRotationAxis(){
+  if(axisHelperGroup) {
+    scene.remove(axisHelperGroup);
+    axisHelperGroup = null;
+  }
+}
+function alwaysShowAxis() { showFixedRotationAxis(currentAxis); }
+function resetTimer(){
+  timerStarted = false;
+  timerStopTime = 0;
+  timerStartTime = 0;
+  cancelAnimationFrame(timerAnimId);
+  document.getElementById("timer").textContent = "00.0";
+  document.getElementById("star-timer").textContent = "制限時間：00.0 秒";
+}
+function startTimer(){
+  timerStarted = true;
+  timerStartTime = performance.now();
+  timerStopTime = 0;
+  showTime();
+}
+function stopTimer(){
+  timerStarted = false;
+  timerStopTime = performance.now();
+  cancelAnimationFrame(timerAnimId);
+}
+function showTime(){
+  if(!timerStarted) return;
+  let t = (performance.now() - timerStartTime)/1000;
+  document.getElementById("timer").textContent = t.toFixed(1).padStart(4,"0");
+  timerAnimId = requestAnimationFrame(showTime);
+}
+function enableStartBtn(){
+  document.getElementById("startBtn").disabled=false;
+}
+function updateStarSelectUI(){
+  var sel = document.getElementById("patternsel");
+  for(let i=0;i<levelStarClearTimes.length;i++){
+    if(levelStarClearTimes[i]!==null)
+      sel.querySelector(`option[value="${i}star"]`).disabled = false;
+  }
+}
+function resetBlocks(){
+  // タイマーを先に停止してクリア判定が走らないようにする
+  timerStarted = false;
+  stopBlockDrop();
+  stopFireworks();
+  document.getElementById('message').textContent = '';
+  blocks = blockDefs.map(cubes=>
+    ({
+      orig: cubes.map(p=>p.slice()),
+      pos: [0,0,0],
+      cubes: cubes.map(p=>p.slice()),
+      locked: false, lockedDropPos: 0
+    })
+  );
+  activeBlock=0;
+  blockDropPos=0;
+  renderBlocks();
+  resetTimer();
+  enableStartBtn();
+  alwaysShowAxis();
+  if(isStarLevel) drawRedLine();
+  else if(redLineMesh) { scene.remove(redLineMesh); redLineMesh=null; }
+}
+function randomizeBlocks(skipReset) {
+  blocks = blockDefs.map(cubes => {
+    let obj = {
+      orig:cubes.map(p=>p.slice()),
+      pos:[0,0,0],
+      cubes:cubes.map(p=>p.slice()),
+      locked: false, lockedDropPos: 0
+    };
+    // ランダム回転を先に行う
+    ["x","y","z"].forEach(axis=>{
+      let n = Math.floor(Math.random()*4);
+      for(let k=0;k<n;k++)
+        obj.cubes = rotateCubesByAxis(obj.cubes, axis, 1);
+    });
+    // 回転後のバウンディングボックスを計算してから位置を決める
+    let xmin=99, xmax=-99, ymin=99, ymax=-99, zmin=99, zmax=-99;
+    for(const [x,y,z] of obj.cubes) {
+      if(x<xmin) xmin=x; if(x>xmax) xmax=x;
+      if(y<ymin) ymin=y; if(y>ymax) ymax=y;
+      if(z<zmin) zmin=z; if(z>zmax) zmax=z;
+    }
+    // 原点に正規化してからランダムオフセットを加える
+    obj.cubes = obj.cubes.map(p=>[p[0]-xmin, p[1]-ymin, p[2]-zmin]);
+    const spanX = xmax-xmin, spanY = ymax-ymin, spanZ = zmax-zmin;
+    const px = Math.floor(Math.random() * Math.max(1, cubeSize - spanX));
+    const py = Math.floor(Math.random() * Math.max(1, cubeSize - spanY));
+    const pz = Math.floor(Math.random() * Math.max(1, cubeSize - spanZ));
+    obj.pos = [px, py, pz];
+    return obj;
+  });
+  activeBlock=0;
+  renderBlocks();
+  if(!skipReset) resetTimer();  // ★モードのstartGame内では呼ばない
+  enableStartBtn();
+  alwaysShowAxis();
+  if(isStarLevel) drawRedLine();
+  else if(redLineMesh) { scene.remove(redLineMesh); redLineMesh=null; }
+}
+function updateBlockSel(){
+  const sel = document.getElementById("blocksel");
+  sel.innerHTML = "";
+  for(let i=0;i<blockDefs.length;i++){
+    const op = document.createElement("option");
+    op.value = i;
+    op.textContent = "ブロック"+(i+1);
+    sel.appendChild(op);
+  }
+}
+
+// ========== 重要: 分かりやすい回転関数 ==========
+function rotateCubesByAxis(cubes, axis, direction=1){
+  // 重心中心で回す
+  let c = [0,0,0];
+  for(let p of cubes) { c[0]+=p[0]; c[1]+=p[1]; c[2]+=p[2]; }
+  c = c.map(e=>e/cubes.length);
+  return cubes.map(p=>{
+    let [x,y,z] = [p[0]-c[0], p[1]-c[1], p[2]-c[2]];
+    let nx, ny, nz;
+    if(axis=="x") { nx=x; ny=direction*-z; nz=direction*y; }
+    else if(axis=="y") { nx=direction*z; ny=y; nz=direction*-x; }
+    else if(axis=="z") { nx=direction*-y; ny=direction*x; nz=z; }
+    return [nx+c[0], ny+c[1], nz+c[2]].map(v=>Math.round(v));
+  });
+}
+
+function rotateBlock(axis, direction=1){
+  if (!timerStarted) return;
+  let b = blocks[activeBlock];
+  b.cubes = rotateCubesByAxis(b.cubes, axis, direction);
+  if(isStarLevel) b.locked = false; // 回転でロック解除
+  renderBlocks();
+  showFixedRotationAxis(axis);
+}
+// ===============================================
+
+function selectBlock(){
+  activeBlock = Number(document.getElementById("blocksel").value);
+  renderBlocks();
+}
+function setCam(idx){
+  const dist = cubeSize * 1.8 + 2;
+  const c = cubeSize/2;
+  const view=[
+    {x:dist, y:dist+yOffset, z:dist},
+    {x:dist, y:dist+yOffset, z:-dist},
+    {x:-dist, y:dist+yOffset, z:-dist},
+    {x:c, y:(dist*1.35)+yOffset, z:c}
+  ][idx];
+  camera.position.set(view.x,view.y,view.z);
+  camera.lookAt(c,c+yOffset,c);
+}
+// checkAndLockBlocks は廃止：★モードではすべてのブロックが常に落下し続ける
+function isSolved(){
+  // 「どのブロックがどこか」ではなく「立方体が隙間なく埋まっているか」で判定
+  // ★モードでは blockDropPos を整数スナップして判定（浮動小数点ズレを防ぐ）
+  let snapDrop = isStarLevel ? Math.round(blockDropPos) : 0;
+  let used = {};
+  for(let b of blocks){
+    for(let c of b.cubes){
+      let x = Math.round(c[0] + b.pos[0]);
+      let y = Math.round(c[1] + b.pos[1]) - snapDrop;
+      let z = Math.round(c[2] + b.pos[2]);
+      // 立方体の範囲外なら未完成
+      if(x < 0 || x >= cubeSize) return false;
+      if(y < 0 || y >= cubeSize) return false;
+      if(z < 0 || z >= cubeSize) return false;
+      // 重複があれば未完成
+      let key = [x, y, z].join();
+      if(used[key]) return false;
+      used[key] = true;
+    }
+  }
+  // 全マスが埋まっていれば完成
+  return Object.keys(used).length === cubeSize ** 3;
+}
+
+function drawRedLine(){
+  if(redLineMesh) scene.remove(redLineMesh);
+  let geo=new THREE.BoxGeometry(cubeSize+2, 0.08, cubeSize+2);
+  let mat=new THREE.MeshBasicMaterial({color:0xff3030});
+  let y = redLineY;
+  redLineMesh = new THREE.Mesh(geo,mat);
+  redLineMesh.position.set(cubeSize/2, y, cubeSize/2);
+  scene.add(redLineMesh);
+}
+function renderBlocks(){
+  for(let mesh of blockMeshes) scene.remove(mesh); blockMeshes=[];
+  let minY = Infinity;
+  for(let i=0;i<blocks.length;i++){
+    let b=blocks[i]; let group=new THREE.Group();
+    for(let p of b.cubes){
+      let geom=new THREE.BoxGeometry(1,1,1);
+      let mat = new THREE.MeshLambertMaterial({
+        color:blockColors[i%blockColors.length],
+        opacity:(i==activeBlock)?0.96:0.85,transparent:true
+      });
+      let drop = isStarLevel ? blockDropPos : 0;
+      let y = p[1]+b.pos[1]+0.5 + yOffset - drop;
+      cube=new THREE.Mesh(geom,mat);
+      cube.position.set(p[0]+b.pos[0]+0.5, y, p[2]+b.pos[2]+0.5);
+      group.add(cube);
+      if(isStarLevel) minY = Math.min(minY, y-0.5);
+    }
+    blockMeshes.push(group); scene.add(group);
+  }
+  if(isStarLevel){
+    if(minY < redLineY){
+      stopTimer(); stopBlockDrop();
+      gameOverReason = "drop";
+      document.getElementById("message").textContent = "ゲームオーバー（ブロック落下）";
+      enableStartBtn();
+      showStarTimer(0);
+      return;
+    }
+  }
+  if(timerStarted && isSolved()){
+    stopTimer();
+    if(isStarLevel) stopBlockDrop();
+    const t = isStarLevel
+      ? Math.max(0, getCurrentStarTimeLimit() - ((performance.now() - timerStartTime) / 1000))
+      : ((timerStopTime - timerStartTime) / 1000);
+    enableStartBtn();
+    clearRotationAxis();
+
+    let titleText, timeText, stars;
+
+    if(!isStarLevel){
+      const pidx = Number(document.getElementById("patternsel").value);
+      const result = calcNormalScore(t);
+      const isNew  = !normalScores[pidx] || result.score > normalScores[pidx].score;
+      if(isNew) normalScores[pidx] = result;
+
+      titleText = `レベル${pidx+1} 完成！`;
+      timeText  = `タイム：${t.toFixed(1)} 秒　スコア：${result.score}点${isNew && normalScores[pidx] ? "　🎉NEW!" : ""}`;
+      stars     = starsText(result.stars);
+      document.getElementById("message").textContent = `完成！ ${t.toFixed(1)}秒 ${result.score}点`;
+
+      if(Number.isInteger(pidx) && levelStarClearTimes[pidx] == null){
+        levelStarClearTimes[pidx] = t;
+        updateStarSelectUI();
+        setTimeout(() => {
+          document.getElementById("message").textContent
+            = `完成！ ${t.toFixed(1)}秒　レベル${pidx+1}★ 解放！`;
+        }, 3200);
+      }
+      saveProgress();
+    } else {
+      const sidx   = starLevelIndex ?? 0;
+      const result = calcStarScore(t);
+      const isNew  = !starScores[sidx] || result.score > starScores[sidx].score;
+      if(isNew) starScores[sidx] = result;
+
+      titleText = `レベル${sidx+1}★ 完成！`;
+      timeText  = `残り：${t.toFixed(1)} 秒　スコア：${result.score}点${isNew ? "　🎉NEW!" : ""}`;
+      stars     = starsText(result.stars);
+      document.getElementById("message").textContent = `★完成！ 残り${t.toFixed(1)}秒 ${result.score}点`;
+      if(Number.isInteger(starLevelIndex)){
+        starLevelCleared[starLevelIndex] = true;
+      }
+      saveProgress();
+    }
+
+    const isAllClear = handleStageClear();
+    if(isAllClear){
+      titleText = "🎉 オールクリア！";
+      timeText  = `トータルスコア：${totalScore()} 点`;
+      stars     = "★★★★★";
+    }
+
+    showClearEffect(titleText, timeText, stars, isAllClear);
+
+    // Streamlit（親ウィンドウ）へスコアを送信
+    try {
+      const level = isStarLevel ? (starLevelIndex ?? 0) + 1 : Number(document.getElementById("patternsel").value) + 1;
+      window.parent.postMessage({
+        type: 'ubongo_score',
+        level,
+        time: parseFloat(t.toFixed(1)),
+        score: isStarLevel ? calcStarScore(t).score : calcNormalScore(t).score,
+        stars,
+        isStarLevel
+      }, '*');
+    } catch(e) {}
+
+  } else if (!timerStarted) {
+    document.getElementById("message").textContent="";
+    alwaysShowAxis();
+  }
+}
+
+function handleStageClear() {
+  // 通常10レベル全クリア かつ ★10レベル全クリアでオールクリア
+  if (levelStarClearTimes[9] && starLevelCleared.every(Boolean)) {
+    if (!allClearFlag) {
+      allClearFlag = true;
+      document.getElementById('all-clear-message').style.display = "block";
+      saveProgress();
+      return true;
+    }
+  }
+  return false;
+}
+
+
+function moveBlock(dx,dy,dz){
+  if (!timerStarted) return;
+  let b = blocks[activeBlock];
+  b.pos[0] += dx; b.pos[1] += dy; b.pos[2] += dz;
+  // 動かしたらロック解除
+  if(isStarLevel) b.locked = false;
+  renderBlocks();
+}
+function moveBlockByLabel(dir) {
+  if (!timerStarted) return;
+  let dx=0,dy=0,dz=0;
+  switch (dir) {
+    case 'A': dx = 1; break;
+    case 'B': dz = 1; break;
+    case 'C': dx = -1; break;
+    case 'D': dz = -1; break;
+  }
+  moveBlock(dx, dy, dz);
+}
+
+function startGame(){
+  document.getElementById("all-clear-message").style.display = "none";
+  resetTimer();
+  document.getElementById("startBtn").disabled=true;
+  document.getElementById("message").textContent = '';
+  if(isStarLevel){
+    let tlim = getCurrentStarTimeLimit();
+    if(!tlim){
+      alert('まず通常レベルをクリアしてください。');
+      enableStartBtn();
+      showStarTimer(0);
+      return;
+    }
+    blockDropPos = 0;
+    randomizeBlocks(true); // skipReset=true：この後startCountdownでタイマーを開始するため
+    startCountdown(tlim);
+    startBlockDrop();
+    // タイム青字大表示ON
+    showStarTimer(tlim);
+  } else {
+    randomizeBlocks();
+    setTimeout(startTimer,50);
+    showStarTimer(0);
+  }
+}
+function getCurrentStarTimeLimit(){
+  if(starLevelIndex===null) return null;
+  return levelStarClearTimes[starLevelIndex];
+}
+function startCountdown(timeLimit){
+  timerStarted = true;
+  timerStartTime = performance.now();
+  timerStopTime = 0;
+  function countDownAnim(){
+    if(!timerStarted) return;
+    let remain = timeLimit - (performance.now()-timerStartTime)/1000;
+    if(remain < 0){
+      remain = 0;
+      stopTimer();
+      gameOverReason = "timeout";
+      document.getElementById("message").textContent="タイムオーバー！";
+      stopBlockDrop();
+      enableStartBtn();
+    }
+    document.getElementById("timer").textContent = remain.toFixed(1).padStart(4,"0");
+    showStarTimer(remain);
+    if(remain>0) timerAnimId = requestAnimationFrame(countDownAnim);
+    else showStarTimer(0);
+  }
+  countDownAnim();
+}
+// ★青太字タイマー
+function showStarTimer(remainSec){
+  const st = document.getElementById("star-timer");
+  if(isStarLevel && remainSec!==undefined){
+    st.style.display = "block";
+    st.textContent = "制限時間：" + remainSec.toFixed(1) + " 秒";
+  }else{
+    st.style.display = "none";
+  }
+}
+function startBlockDrop(){
+  stopBlockDrop();
+  function dropAnim(){
+    if(!timerStarted || !isStarLevel) return;
+    blockDropPos += dropSpeed;
+    renderBlocks();
+    dropAnimId = requestAnimationFrame(dropAnim);
+  }
+  dropAnimId = requestAnimationFrame(dropAnim);
+}
+function stopBlockDrop(){
+  if(dropAnimId) cancelAnimationFrame(dropAnimId);
+  dropAnimId = null;
+}
+function changePattern() {
+  document.getElementById('all-clear-message').style.display="none";
+  allClearFlag = false;
+  let idx = document.getElementById("patternsel").value;
+  // cubeSizeをレベルに合わせて更新
+  if(!idx.toString().includes('star')){
+    cubeSize = getCubeSizeForLevel(Number(idx));
+  }
+  isStarLevel = false;
+  starLevelIndex = null;
+  if(idx.endsWith("star")){
+    isStarLevel = true;
+    starLevelIndex = Number(idx[0]);
+    blockDefs = blockPatternList[starLevelIndex];
+    cubeSize = getCubeSizeForLevel(starLevelIndex);
+  }else{
+    blockDefs = blockPatternList[Number(idx)];
+    cubeSize = getCubeSizeForLevel(Number(idx));
+  }
+  drawOutlineCube();
+  addDirectionLabels();
+  updateBlockSel();
+  resetBlocks();
+  setCam(0);
+  alwaysShowAxis();
+  if(isStarLevel) {
+    drawRedLine();
+    showStarTimer(getCurrentStarTimeLimit()||0);
+  } else {
+    showStarTimer(0);
+  }
+}
+window.addEventListener('resize', resizeRenderer);
+
+// ===================== キーボード操作 =====================
+window.addEventListener('keydown', e => {
+  // テキスト入力中は無効
+  if(e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  // ヘルプ表示中はEscで閉じる
+  if(e.key === 'Escape'){ closeHelp(); return; }
+  if(!timerStarted) return;
+
+  switch(e.key.toLowerCase()){
+    // 移動：WASDQE
+    case 'w': moveBlock(0,0,-1); break;
+    case 's': moveBlock(0,0, 1); break;
+    case 'a': moveBlock(-1,0,0); break;
+    case 'd': moveBlock( 1,0,0); break;
+    case 'q': moveBlock(0,-1,0); break;
+    case 'e': moveBlock(0, 1,0); break;
+    // 回転：JL / IK / UO
+    case 'j': rotateBlock('x', 1); break;
+    case 'l': rotateBlock('x',-1); break;
+    case 'i': rotateBlock('y', 1); break;
+    case 'k': rotateBlock('y',-1); break;
+    case 'u': rotateBlock('z', 1); break;
+    case 'o': rotateBlock('z',-1); break;
+    // ブロック選択：1〜6
+    case '1': case '2': case '3':
+    case '4': case '5': case '6':
+      { const idx = parseInt(e.key) - 1;
+        if(idx < blocks.length){ activeBlock = idx; updateBlockSel(); renderBlocks(); }
+      } break;
+    // 次のブロック：Tab
+    case 'tab':
+      e.preventDefault();
+      activeBlock = (activeBlock + 1) % blocks.length;
+      updateBlockSel(); renderBlocks();
+      break;
+    // 矢印キー：カメラ移動
+    case 'arrowright':
+      e.preventDefault();
+      camera.position.x += 0.5;
+      camera.lookAt(cubeSize/2, cubeSize/2+yOffset, cubeSize/2); break;
+    case 'arrowleft':
+      e.preventDefault();
+      camera.position.x -= 0.5;
+      camera.lookAt(cubeSize/2, cubeSize/2+yOffset, cubeSize/2); break;
+    case 'arrowup':
+      e.preventDefault();
+      camera.position.y += 0.5;
+      camera.lookAt(cubeSize/2, cubeSize/2+yOffset, cubeSize/2); break;
+    case 'arrowdown':
+      e.preventDefault();
+      camera.position.y -= 0.5;
+      camera.lookAt(cubeSize/2, cubeSize/2+yOffset, cubeSize/2); break;
+  }
+});
+
+// ===================== スマホ：スワイプ＆マルチタップ =====================
+(function(){
+  const canvas = document.getElementById('myCanvas');
+  let touchStartX = 0, touchStartY = 0;
+  let touchStartTime = 0;
+  const SWIPE_THRESHOLD = 30;  // スワイプ判定px
+  const TAP_THRESHOLD   = 10;  // タップ判定px（これ以内の移動はタップ）
+  const TAP_TIME        = 250; // タップ判定ms
+
+  canvas.addEventListener('touchstart', e => {
+    if(e.touches.length === 1){
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      touchStartTime = Date.now();
+    }
+  }, { passive: true });
+
+  canvas.addEventListener('touchend', e => {
+    if(!timerStarted) return;
+    const touchCount = e.changedTouches.length + (e.touches ? e.touches.length : 0);
+
+    // 2本指タップ → Y軸回転
+    if(e.touches.length === 0 && e.changedTouches.length === 2){
+      const dx = Math.abs(e.changedTouches[0].clientX - touchStartX);
+      const dy = Math.abs(e.changedTouches[0].clientY - touchStartY);
+      if(dx < TAP_THRESHOLD && dy < TAP_THRESHOLD && Date.now() - touchStartTime < TAP_TIME){
+        rotateBlock('y', 1);
+      }
+      return;
+    }
+
+    // 3本指タップ → 次のブロック切替
+    if(e.touches.length === 0 && e.changedTouches.length === 3){
+      activeBlock = (activeBlock + 1) % blocks.length;
+      updateBlockSel(); renderBlocks();
+      return;
+    }
+
+    // 1本指スワイプ → 移動
+    if(e.changedTouches.length === 1){
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      const dy = e.changedTouches[0].clientY - touchStartY;
+      const elapsed = Date.now() - touchStartTime;
+      if(elapsed > TAP_TIME * 2) return; // 長押しは無視
+
+      if(Math.abs(dx) > Math.abs(dy)){
+        if(Math.abs(dx) > SWIPE_THRESHOLD){
+          dx > 0 ? moveBlock(1,0,0) : moveBlock(-1,0,0);
+        }
+      } else {
+        if(Math.abs(dy) > SWIPE_THRESHOLD){
+          dy > 0 ? moveBlock(0,-1,0) : moveBlock(0,1,0);
+        }
+      }
+    }
+  }, { passive: true });
+})();
+
+// ===================== スコアボード =====================
+function openScoreboard(){
+  const table = document.getElementById('scoreboard-table');
+  // ヘッダー行を残して再描画
+  while(table.rows.length > 1) table.deleteRow(1);
+
+  // 通常レベル＋★レベルを交互に表示
+  for(let i = 0; i < 10; i++){
+    const sn = normalScores[i];
+    const row = table.insertRow();
+    row.insertCell().textContent = `レベル${i+1}`;
+    row.insertCell().textContent = sn ? `${sn.time.toFixed(1)}秒` : '－';
+    row.insertCell().textContent = sn ? `${sn.score}点` : '－';
+    row.insertCell().textContent = sn ? starsText(sn.stars) : '－';
+
+    const ss = starScores[i];
+    const row2 = table.insertRow();
+    row2.insertCell().textContent = `レベル${i+1}★`;
+    row2.insertCell().textContent = ss ? `残り${ss.time.toFixed(1)}秒` : '－';
+    row2.insertCell().textContent = ss ? `${ss.score}点` : '－';
+    row2.insertCell().textContent = ss ? starsText(ss.stars) : '－';
+  }
+
+  // 合計行
+  const total = totalScore();
+  const row = table.insertRow();
+  row.className = 'total-row';
+  row.insertCell().textContent = '合計';
+  row.insertCell().textContent = '';
+  row.insertCell().textContent = `${total}点`;
+  row.insertCell().textContent = '';
+
+  document.getElementById('scoreboard').classList.add('show');
+  document.getElementById('scoreboard-backdrop').classList.add('show');
+}
+
+function closeScoreboard(){
+  document.getElementById('scoreboard').classList.remove('show');
+  document.getElementById('scoreboard-backdrop').classList.remove('show');
+}
+
+// ===================== ヘルプ表示 =====================
+let helpShownOnce = false;
+
+function openHelp(){
+  const overlay = document.getElementById('help-overlay');
+  const box = document.getElementById('help-box');
+  overlay.classList.add('show');
+  box.classList.remove('animate');
+  void box.offsetWidth; // reflow
+  box.classList.add('animate');
+}
+
+function closeHelp(){
+  document.getElementById('help-overlay').classList.remove('show');
+  helpShownOnce = true;
+}
+
+// オーバーレイ背景クリックで閉じる
+document.getElementById('help-overlay').addEventListener('click', e => {
+  if(e.target === document.getElementById('help-overlay')) closeHelp();
+});
+
+// 初回のみ自動表示（1秒後）
+setTimeout(() => {
+  if(!helpShownOnce) openHelp();
+}, 1000);
+
+// ===================== クリア演出 =====================
+let fireworkParticles = [];
+let fireworkAnimId = null;
+
+function launchFireworks(duration = 3000) {
+  stopFireworks();
+  const startTime = performance.now();
+  const colors = [0xff4081, 0xffea00, 0x00e5ff, 0x76ff03, 0xff6d00, 0xd500f9, 0xffffff];
+
+  function spawnBurst() {
+    const count = 80 + Math.floor(Math.random() * 60);
+    const cx = Math.random() * cubeSize;
+    const cy = 1.5 + Math.random() * cubeSize;
+    const cz = Math.random() * cubeSize;
+    const color = colors[Math.floor(Math.random() * colors.length)];
+    const geom = new THREE.BufferGeometry();
+    const positions = new Float32Array(count * 3);
+    const velocities = [];
+    for (let i = 0; i < count; i++) {
+      positions[i*3]   = cx;
+      positions[i*3+1] = cy;
+      positions[i*3+2] = cz;
+      const theta = Math.random() * Math.PI * 2;
+      const phi   = Math.random() * Math.PI;
+      const speed = 0.04 + Math.random() * 0.1;
+      velocities.push([
+        Math.sin(phi) * Math.cos(theta) * speed,
+        Math.cos(phi) * speed,
+        Math.sin(phi) * Math.sin(theta) * speed
+      ]);
+    }
+    geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const mat = new THREE.PointsMaterial({ color, size: 0.18, transparent: true, opacity: 1 });
+    const points = new THREE.Points(geom, mat);
+    scene.add(points);
+    fireworkParticles.push({ points, velocities, geom, mat, life: 1.0 });
+  }
+
+  let lastBurst = 0;
+  function animate(now) {
+    const elapsed = now - startTime;
+    if (elapsed > duration) { stopFireworks(); return; }
+
+    // 定期的にバースト
+    if (now - lastBurst > 320) { spawnBurst(); lastBurst = now; }
+
+    // パーティクル更新
+    for (let i = fireworkParticles.length - 1; i >= 0; i--) {
+      const fw = fireworkParticles[i];
+      fw.life -= 0.018;
+      fw.mat.opacity = Math.max(0, fw.life);
+      const pos = fw.geom.attributes.position.array;
+      for (let j = 0; j < fw.velocities.length; j++) {
+        pos[j*3]   += fw.velocities[j][0];
+        pos[j*3+1] += fw.velocities[j][1] - 0.002; // 重力
+        pos[j*3+2] += fw.velocities[j][2];
+      }
+      fw.geom.attributes.position.needsUpdate = true;
+      if (fw.life <= 0) {
+        scene.remove(fw.points);
+        fw.geom.dispose(); fw.mat.dispose();
+        fireworkParticles.splice(i, 1);
+      }
+    }
+    fireworkAnimId = requestAnimationFrame(animate);
+  }
+  fireworkAnimId = requestAnimationFrame(animate);
+}
+
+function stopFireworks() {
+  if (fireworkAnimId) { cancelAnimationFrame(fireworkAnimId); fireworkAnimId = null; }
+  for (const fw of fireworkParticles) {
+    scene.remove(fw.points); fw.geom.dispose(); fw.mat.dispose();
+  }
+  fireworkParticles = [];
+}
+
+function showClearEffect(titleText, timeText, stars, isAllClear = false) {
+  const overlay  = document.getElementById('clear-overlay');
+  const popup    = document.getElementById('clear-message-popup');
+  const titleEl  = document.getElementById('clear-title-text');
+  const timeEl   = document.getElementById('clear-time-text');
+  const starEl   = document.getElementById('clear-star-text');
+
+  titleEl.textContent = titleText;
+  timeEl.textContent  = timeText;
+  starEl.textContent  = stars;
+
+  overlay.classList.add('show');
+  popup.classList.remove('pop-in', 'pop-out', 'all-clear');
+  if (isAllClear) popup.classList.add('all-clear');
+
+  // 少し遅らせてアニメ開始
+  setTimeout(() => popup.classList.add('pop-in'), 80);
+
+  // 花火スタート
+  launchFireworks(isAllClear ? 5000 : 3000);
+
+  // 3秒後にフェードアウト
+  setTimeout(() => {
+    popup.classList.remove('pop-in');
+    popup.classList.add('pop-out');
+    setTimeout(() => {
+      overlay.classList.remove('show');
+      popup.className = '';
+    }, 400);
+  }, isAllClear ? 4500 : 2800);
+}
+// 旧keydownリスナーは上部の新しいkeydownに統合済み
+resetBlocks();
+setCam(0);
+alwaysShowAxis();
+animate();
+function animate(){
+  requestAnimationFrame(animate);
+  renderer.render(scene,camera);
+}
+updateBlockSel();
+updateStarSelectUI();
+// セーブデータのallClearFlagを反映
+if(allClearFlag){
+  document.getElementById('all-clear-message').style.display = "block";
+}
+</script>
+</body>
+</html>
