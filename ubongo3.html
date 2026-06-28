@@ -503,7 +503,8 @@
       <tr><td>2本指タップ</td><td>Y軸回転（左右に回す）</td></tr>
       <tr><td>3本指タップ</td><td>次のブロックに切替</td></tr>
     </table>
-    <div class="help-footer">画面をタップするか ✕ で閉じる</div>
+    <div class="help-footer">✕ボタンまたは枠外をタップして閉じる</div>
+    <button onclick="closeHelp()" style="margin-top:10px; width:100%; padding:10px; background:#7B5EA7; color:#fff; border:none; border-radius:10px; font-size:1em; font-weight:bold; cursor:pointer;">閉じる</button>
   </div>
 </div>
 
@@ -1396,6 +1397,9 @@ function closeHelp(){
 
 // オーバーレイ背景クリックで閉じる
 document.getElementById('help-overlay').addEventListener('click', e => {
+  if(e.target === document.getElementById('help-overlay')) closeHelp();
+});
+document.getElementById('help-overlay').addEventListener('touchend', e => {
   if(e.target === document.getElementById('help-overlay')) closeHelp();
 });
 
