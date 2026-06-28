@@ -137,8 +137,10 @@
       z-index: 200;
       align-items: center;
       justify-content: center;
+      cursor: pointer;
     }
     #help-overlay.show { display: flex; }
+    #help-box { cursor: default; }
     #help-box {
       background: linear-gradient(135deg, #fff9e6 0%, #f3e8ff 100%);
       border: 3px solid #b39ddb;
@@ -503,8 +505,7 @@
       <tr><td>2本指タップ</td><td>Y軸回転（左右に回す）</td></tr>
       <tr><td>3本指タップ</td><td>次のブロックに切替</td></tr>
     </table>
-    <div class="help-footer">✕ボタンまたは枠外をタップして閉じる</div>
-    <button onclick="closeHelp()" style="margin-top:10px; width:100%; padding:10px; background:#7B5EA7; color:#fff; border:none; border-radius:10px; font-size:1em; font-weight:bold; cursor:pointer;">閉じる</button>
+    <button onclick="closeHelp()" style="margin-top:14px; width:100%; padding:14px; background:#7B5EA7; color:#fff; border:none; border-radius:12px; font-size:1.1em; font-weight:bold; cursor:pointer; letter-spacing:2px;">✕ 閉じる</button>
   </div>
 </div>
 
@@ -1396,12 +1397,14 @@ function closeHelp(){
 }
 
 // オーバーレイ背景クリックで閉じる
+// overlayのどこをタップしても閉じる（help-box内は除く）
 document.getElementById('help-overlay').addEventListener('click', e => {
-  if(e.target === document.getElementById('help-overlay')) closeHelp();
+  if(!document.getElementById('help-box').contains(e.target)) closeHelp();
 });
 document.getElementById('help-overlay').addEventListener('touchend', e => {
-  if(e.target === document.getElementById('help-overlay')) closeHelp();
-});
+  e.preventDefault();
+  if(!document.getElementById('help-box').contains(e.target)) closeHelp();
+}, {passive: false});
 
 // 初回のみ自動表示（1秒後）
 setTimeout(() => {
