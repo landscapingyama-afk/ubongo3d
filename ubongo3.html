@@ -139,8 +139,9 @@
       #timer { font-size: 0.95em; margin-left: 4px; }
 
       /* ブロック色説明・注釈を非表示（スペース節約） */
-      .blockcolors-sample { display: none; }
       .smallnote { display: none; }
+      /* ブロック色説明は表示（注釈のみ非表示）*/
+      .blockcolors-sample { display: inline; font-size: 0.72em; }
       .dir-labels { font-size: 0.72em; }
 
       /* swipeヒントを小さく */
@@ -520,7 +521,7 @@
 <!-- ヘルプオーバーレイ -->
 <div id="help-overlay">
   <div id="help-box">
-    <button id="help-close" onclick="closeHelp()">✕</button>
+    <button id="help-close" onclick="closeHelp()" ontouchend="event.preventDefault();closeHelp();">✕</button>
     <h2>🎮 操作ガイド</h2>
     <table>
       <tr><th>キー</th><th>動作</th></tr>
@@ -540,7 +541,7 @@
       <tr><td>2本指タップ</td><td>Y軸回転（左右）</td></tr><tr><td>2本指左右スワイプ</td><td>X軸回転（前後）</td></tr><tr><td>2本指上下スワイプ</td><td>Z軸回転（横）</td></tr>
       <tr><td>3本指タップ</td><td>次のブロックに切替</td></tr>
     </table>
-    <button onclick="closeHelp()" style="margin-top:14px; width:100%; padding:14px; background:#7B5EA7; color:#fff; border:none; border-radius:12px; font-size:1.1em; font-weight:bold; cursor:pointer; letter-spacing:2px;">✕ 閉じる</button>
+    <button onclick="closeHelp()" ontouchend="event.preventDefault();closeHelp();" style="margin-top:14px; width:100%; padding:14px; background:#7B5EA7; color:#fff; border:none; border-radius:12px; font-size:1.1em; font-weight:bold; cursor:pointer; letter-spacing:2px;">✕ 閉じる</button>
   </div>
 </div>
 
@@ -617,7 +618,7 @@ function getCubeSizeForLevel(idx){
 }
 
 const yOffset = 2.1;
-const redLineY = -2.1;
+const redLineY = -4.5;
 let levelStarClearTimes = Array(10).fill(null);
 let starLevelCleared = Array(10).fill(false);
 let isStarLevel = false;
@@ -1461,9 +1462,8 @@ document.getElementById('help-overlay').addEventListener('click', e => {
   if(!document.getElementById('help-box').contains(e.target)) closeHelp();
 });
 document.getElementById('help-overlay').addEventListener('touchend', e => {
-  e.preventDefault();
   if(!document.getElementById('help-box').contains(e.target)) closeHelp();
-}, {passive: false});
+}, {passive: true});
 
 // 初回のみ自動表示（1秒後）
 setTimeout(() => {
