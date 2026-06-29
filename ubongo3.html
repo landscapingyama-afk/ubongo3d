@@ -121,11 +121,30 @@
 
     /* ===== スマホ対応 ===== */
     @media screen and (max-width: 600px) {
-      #init-message  { font-size: 1em; }
-      #all-clear-message { font-size: 1.1em; }
-      #star-timer    { font-size: 1.2em; }
-      #controls      { font-size: 0.9em; }
-      #controls button { padding: 5px 7px; font-size: 0.88em; }
+      /* ヘッダーを極限まで小さく */
+      #header-panel  { padding: 2px 6px 2px; border-bottom: 1px solid #e8d97a; }
+      #init-message  { font-size: 0.78em; margin: 1px 0 2px; letter-spacing: 1px; }
+      #all-clear-message { font-size: 0.9em; margin: 1px 0; }
+      #star-timer    { font-size: 0.95em; margin: 1px 0; }
+
+      /* コントロールパネルをコンパクトに */
+      #controls      { padding: 2px 6px; font-size: 0.78em; }
+      #controls .ctrl-row { gap: 2px; margin-bottom: 1px; }
+      #controls button {
+        padding: 3px 5px;
+        font-size: 0.75em;
+        border-radius: 4px;
+      }
+      #controls select { padding: 2px 2px; font-size: 0.75em; }
+      #timer { font-size: 0.95em; margin-left: 4px; }
+
+      /* ブロック色説明・注釈を非表示（スペース節約） */
+      .blockcolors-sample { display: none; }
+      .smallnote { display: none; }
+      .dir-labels { font-size: 0.72em; }
+
+      /* swipeヒントを小さく */
+      #swipe-hint { font-size: 0.72em; padding: 3px 10px; }
     }
 
     /* ===== ヘルプ・チュートリアルオーバーレイ ===== */
@@ -245,9 +264,11 @@
       background: linear-gradient(135deg, #fff9e6 0%, #f3e8ff 100%);
       border: 3px solid #b39ddb;
       border-radius: 20px;
-      padding: 24px 32px;
+      padding: 16px 20px;
       max-width: 480px;
       width: 92vw;
+      max-height: 80vh;
+      overflow-y: auto;
       box-shadow: 0 8px 32px rgba(120,80,200,0.3);
     }
     #scoreboard h2 {
@@ -282,11 +303,23 @@
       border-top: 2px solid #b39ddb;
     }
     #scoreboard-close {
-      position: absolute; top: 12px; right: 16px;
-      background: none; border: none;
-      font-size: 1.5em; cursor: pointer; color: #999; line-height: 1;
+      position: sticky;
+      top: 0;
+      float: right;
+      background: #7B5EA7;
+      border: none;
+      border-radius: 50%;
+      width: 36px;
+      height: 36px;
+      font-size: 1.2em;
+      cursor: pointer;
+      color: #fff;
+      line-height: 36px;
+      text-align: center;
+      z-index: 10;
+      margin-left: 8px;
     }
-    #scoreboard-close:hover { color: #7B5EA7; }
+    #scoreboard-close:hover { background: #5c3d9e; }
     #scoreboard-backdrop {
       display: none;
       position: fixed; inset: 0;
@@ -470,7 +503,7 @@
 </div>
 
 <!-- スコアボード -->
-<div id="scoreboard-backdrop" onclick="closeScoreboard()"></div>
+<div id="scoreboard-backdrop" onclick="closeScoreboard()" ontouchend="closeScoreboard()"></div>
 <div id="scoreboard">
   <button id="scoreboard-close" onclick="closeScoreboard()">✕</button>
   <h2>🏆 スコアボード</h2>
@@ -513,7 +546,7 @@
 
 <div style="position:relative;">
   <canvas id="myCanvas"></canvas>
-  <div id="swipe-hint">👆 スワイプで移動　2本指タップで回転</div>
+  <div id="swipe-hint">👆 スワイプ:移動　2本指タップ:回転　3本指タップ:次のブロック</div>
 </div>
 <script>
 // --- 問題セット（元まま、ここは省略不可。コード省略なし） ---
@@ -1284,57 +1317,66 @@ window.addEventListener('keydown', e => {
 
 // ===================== スマホ：スワイプ＆マルチタップ =====================
 (function(){
-  const canvas = document.getElementById('myCanvas');
+  // canvasではなくdocument全体で検知（iframeでも確実に動作させるため）
   let touchStartX = 0, touchStartY = 0;
   let touchStartTime = 0;
-  const SWIPE_THRESHOLD = 30;  // スワイプ判定px
-  const TAP_THRESHOLD   = 10;  // タップ判定px（これ以内の移動はタップ）
-  const TAP_TIME        = 250; // タップ判定ms
+  let touchStartCount = 0;
+  const SWIPE_THRESHOLD = 40;  // スワイプ判定px（少し大きめ）
+  const TAP_THRESHOLD   = 15;  // タップ判定px
+  const TAP_TIME        = 300; // タップ判定ms
+  const SWIPE_TIME      = 400; // スワイプ判定ms
 
-  canvas.addEventListener('touchstart', e => {
-    if(e.touches.length === 1){
-      touchStartX = e.touches[0].clientX;
-      touchStartY = e.touches[0].clientY;
-      touchStartTime = Date.now();
-    }
+  document.addEventListener('touchstart', e => {
+    // ヘルプやスコアボードが開いている場合は無視
+    if(document.getElementById('help-overlay').classList.contains('show')) return;
+    if(document.getElementById('scoreboard').classList.contains('show')) return;
+
+    touchStartCount = e.touches.length;
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+    touchStartTime = Date.now();
   }, { passive: true });
 
-  canvas.addEventListener('touchend', e => {
+  document.addEventListener('touchend', e => {
     if(!timerStarted) return;
-    const touchCount = e.changedTouches.length + (e.touches ? e.touches.length : 0);
+    // ヘルプやスコアボードが開いている場合は無視
+    if(document.getElementById('help-overlay').classList.contains('show')) return;
+    if(document.getElementById('scoreboard').classList.contains('show')) return;
 
-    // 2本指タップ → Y軸回転
-    if(e.touches.length === 0 && e.changedTouches.length === 2){
-      const dx = Math.abs(e.changedTouches[0].clientX - touchStartX);
-      const dy = Math.abs(e.changedTouches[0].clientY - touchStartY);
-      if(dx < TAP_THRESHOLD && dy < TAP_THRESHOLD && Date.now() - touchStartTime < TAP_TIME){
-        rotateBlock('y', 1);
-      }
+    const elapsed = Date.now() - touchStartTime;
+    const endCount = e.changedTouches.length;
+    const totalCount = touchStartCount; // タッチ開始時の本数で判定
+
+    // 最終的に離れた指の座標
+    const endX = e.changedTouches[0].clientX;
+    const endY = e.changedTouches[0].clientY;
+    const dx = endX - touchStartX;
+    const dy = endY - touchStartY;
+    const absDx = Math.abs(dx);
+    const absDy = Math.abs(dy);
+
+    // 3本指タップ → 次のブロック切替
+    if(totalCount >= 3 && elapsed < TAP_TIME && absDx < TAP_THRESHOLD && absDy < TAP_THRESHOLD){
+      activeBlock = (activeBlock + 1) % blocks.length;
+      updateBlockSel();
+      renderBlocks();
       return;
     }
 
-    // 3本指タップ → 次のブロック切替
-    if(e.touches.length === 0 && e.changedTouches.length === 3){
-      activeBlock = (activeBlock + 1) % blocks.length;
-      updateBlockSel(); renderBlocks();
+    // 2本指タップ → Y軸回転
+    if(totalCount === 2 && elapsed < TAP_TIME && absDx < TAP_THRESHOLD && absDy < TAP_THRESHOLD){
+      rotateBlock('y', 1);
       return;
     }
 
     // 1本指スワイプ → 移動
-    if(e.changedTouches.length === 1){
-      const dx = e.changedTouches[0].clientX - touchStartX;
-      const dy = e.changedTouches[0].clientY - touchStartY;
-      const elapsed = Date.now() - touchStartTime;
-      if(elapsed > TAP_TIME * 2) return; // 長押しは無視
-
-      if(Math.abs(dx) > Math.abs(dy)){
-        if(Math.abs(dx) > SWIPE_THRESHOLD){
-          dx > 0 ? moveBlock(1,0,0) : moveBlock(-1,0,0);
-        }
-      } else {
-        if(Math.abs(dy) > SWIPE_THRESHOLD){
-          dy > 0 ? moveBlock(0,-1,0) : moveBlock(0,1,0);
-        }
+    if(totalCount === 1 && elapsed < SWIPE_TIME){
+      if(absDx > absDy && absDx > SWIPE_THRESHOLD){
+        // 左右スワイプ
+        dx > 0 ? moveBlock(1,0,0) : moveBlock(-1,0,0);
+      } else if(absDy > absDx && absDy > SWIPE_THRESHOLD){
+        // 上下スワイプ（上=Y+、下=Y-）
+        dy > 0 ? moveBlock(0,-1,0) : moveBlock(0,1,0);
       }
     }
   }, { passive: true });
