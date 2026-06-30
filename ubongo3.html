@@ -517,6 +517,10 @@
       <th>評価</th>
     </tr>
   </table>
+  <div style="margin-top:12px; text-align:center;">
+    <button onclick="clearProgress()" style="background:#fff0f0; border:1px solid #ffaaaa; color:#c00; border-radius:8px; padding:5px 14px; font-size:0.85em; cursor:pointer;">🗑 セーブデータを削除</button>
+  </div>
+  <button onclick="closeScoreboard()" ontouchend="event.preventDefault();closeScoreboard();" style="margin-top:10px; width:100%; padding:14px; background:#7B5EA7; color:#fff; border:none; border-radius:12px; font-size:1.1em; font-weight:bold; cursor:pointer; letter-spacing:2px;">✕ 閉じる</button>
 </div>
 
 <!-- ヘルプオーバーレイ -->
@@ -671,6 +675,11 @@ function loadProgress() {
     if (data.levelStarClearTimes) levelStarClearTimes = data.levelStarClearTimes;
     if (data.starLevelCleared)    starLevelCleared    = data.starLevelCleared;
     if (data.allClearFlag)        allClearFlag        = data.allClearFlag;
+
+    // 異常値ガード：負の値やNaN、極端な値（1時間=3600秒超）のみ無効化
+    const isValidTime = t => typeof t === 'number' && isFinite(t) && t > 0 && t <= 3600;
+    levelStarClearTimes = levelStarClearTimes.map(t => isValidTime(t) ? t : null);
+    normalScores = normalScores.map(s => (s && isValidTime(s.time)) ? s : null);
   } catch(e) {
     console.warn('読み込み失敗:', e);
   }
@@ -1072,8 +1081,8 @@ function renderBlocks(){
       stars     = starsText(result.stars);
       document.getElementById("message").textContent = `完成！ ${t.toFixed(1)}秒 ${result.score}点`;
 
-      if(Number.isInteger(pidx) && levelStarClearTimes[pidx] == null){
-        // 表示と完全一致させるため小数第1位で丸めて保存
+      if(Number.isInteger(pidx) && levelStarClearTimes[pidx] == null && t > 0 && t <= 3600){
+        // 表示と完全一致させるため小数第1位で丸めて保存（異常値のみ除外）
         levelStarClearTimes[pidx] = parseFloat(t.toFixed(1));
         updateStarSelectUI();
         setTimeout(() => {
