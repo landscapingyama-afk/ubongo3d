@@ -470,7 +470,8 @@
     <button onclick="setCam(2)">奥</button>
     <button onclick="setCam(3)">上</button>
     <span>カメラ切替</span>
-    &nbsp;｜&nbsp;
+  </div>
+  <div class="ctrl-row">
     レベル：
     <select id="patternsel" onchange="changePattern()">
       <option value="0">レベル1</option>
@@ -494,7 +495,7 @@
       <option value="9">レベル10</option>
       <option value="9star" class="star-option" disabled>レベル10★</option>
     </select>
-    <button onclick="startGame()" id="startBtn">スタート</button>
+    <button onclick="startGame()" id="startBtn" style="margin-left:8px;">スタート</button>
     <span id="timer">00.0</span>
     <span id="message"></span>
     <button onclick="resetBlocks()" style="margin-left:auto;">リセット</button>
@@ -1072,7 +1073,8 @@ function renderBlocks(){
       document.getElementById("message").textContent = `完成！ ${t.toFixed(1)}秒 ${result.score}点`;
 
       if(Number.isInteger(pidx) && levelStarClearTimes[pidx] == null){
-        levelStarClearTimes[pidx] = t;
+        // 表示と完全一致させるため小数第1位で丸めて保存
+        levelStarClearTimes[pidx] = parseFloat(t.toFixed(1));
         updateStarSelectUI();
         setTimeout(() => {
           document.getElementById("message").textContent
@@ -1333,18 +1335,31 @@ window.addEventListener('keydown', e => {
   const TAP_TIME        = 300; // タップ判定ms
   const SWIPE_TIME      = 400; // スワイプ判定ms
 
+  let touchActive = false;
+
   document.addEventListener('touchstart', e => {
     // ヘルプやスコアボードが開いている場合は無視
     if(document.getElementById('help-overlay').classList.contains('show')) return;
     if(document.getElementById('scoreboard').classList.contains('show')) return;
+    // ボタンやUI要素上のタッチは無視（操作パネル等はスクロール・タップを優先）
+    if(e.target.closest('#controls, #header-panel, #help-overlay, #scoreboard, #scoreboard-backdrop')) return;
 
+    touchActive = true;
     touchStartCount = e.touches.length;
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
     touchStartTime = Date.now();
   }, { passive: true });
 
+  // ゲーム画面上でのスワイプ中はページスクロールを止める
+  document.addEventListener('touchmove', e => {
+    if(!touchActive) return;
+    if(e.target.closest('#controls, #header-panel, #help-overlay, #scoreboard, #scoreboard-backdrop')) return;
+    e.preventDefault();
+  }, { passive: false });
+
   document.addEventListener('touchend', e => {
+    touchActive = false;
     if(!timerStarted) return;
     // ヘルプやスコアボードが開いている場合は無視
     if(document.getElementById('help-overlay').classList.contains('show')) return;
