@@ -515,6 +515,7 @@
       <th>タイム</th>
       <th>スコア</th>
       <th>評価</th>
+      <th>名前</th>
     </tr>
   </table>
   <div style="margin-top:12px; text-align:center;">
@@ -539,7 +540,7 @@
       <tr><td>I / K</td><td>Y軸で回転（左右に回す）</td></tr>
       <tr><td>U / O</td><td>Z軸で回転（横に倒す）</td></tr>
       <tr><td colspan="2" class="section-label">── ブロック選択 ──</td></tr>
-      <tr><td>1 〜 6</td><td>ブロックを番号で選択</td></tr>
+      <tr><td>1 〜 7</td><td>ブロックを番号で選択</td></tr>
       <tr><td>Tab</td><td>次のブロックに切替</td></tr>
       <tr><td colspan="2" class="section-label">── スマホ操作 ──</td></tr>
       <tr><td>スワイプ</td><td>上下左右にブロック移動</td></tr>
@@ -626,11 +627,16 @@ const yOffset = 2.1;
 const redLineY = -4.5;
 let levelStarClearTimes = Array(10).fill(null);
 let starLevelCleared = Array(10).fill(false);
+// 【追加】このセッション（ページを開いてから）で通常レベルをクリアしたかどうか。
+// ★レベルは「自分でクリアした人」だけが挑戦できるよう、リロードでリセットされる。
+let starUnlockedThisSession = Array(10).fill(false);
 let isStarLevel = false;
 let starLevelIndex = null;
 let blockDropPos = 0;
 let dropAnimId = null;
-let dropSpeed = 0.0005;
+// 【修正】落下速度を「1フレームあたり」から「1秒あたり」に変更（フレームレート非依存）
+// 旧: 0.0005/フレーム ≒ 60fpsで 0.03/秒
+let dropSpeed = 0.03;
 let gameOverReason = "";
 let redLineMesh = null;
 let blocks = [], activeBlock = 0;
@@ -642,10 +648,21 @@ let timerAnimId = null;
 let allClearFlag = false;
 
 // スコア記録（各レベルのベストスコアと星評価）
-// normalScores[i]  = {score, stars, time}  通常レベル
-// starScores[i]    = {score, stars, time}  ★レベル
+// normalScores[i]  = {score, stars, time, name}  通常レベル
+// starScores[i]    = {score, stars, time, name}  ★レベル
 let normalScores = Array(10).fill(null);
 let starScores   = Array(10).fill(null);
+
+// 【追加】ベスト記録の名前登録
+let lastPlayerName = '';
+function askPlayerName(){
+  let name = prompt('🎉 ベスト記録更新！\nスコアボードに表示する名前を入力してください（12文字まで）', lastPlayerName);
+  if(name === null) name = lastPlayerName; // キャンセル時は前回の名前を使う
+  name = String(name).trim().slice(0, 12);
+  if(!name) name = '名無し';
+  lastPlayerName = name;
+  return name;
+}
 
 // ===== localStorage 保存・読み込み =====
 const LS_KEY = 'ubongo3d_save_v1';
@@ -657,7 +674,8 @@ function saveProgress() {
       starScores,
       levelStarClearTimes,
       starLevelCleared,
-      allClearFlag
+      allClearFlag,
+      lastPlayerName
     };
     localStorage.setItem(LS_KEY, JSON.stringify(data));
   } catch(e) {
@@ -680,6 +698,16 @@ function loadProgress() {
     const isValidTime = t => typeof t === 'number' && isFinite(t) && t > 0 && t <= 3600;
     levelStarClearTimes = levelStarClearTimes.map(t => isValidTime(t) ? t : null);
     normalScores = normalScores.map(s => (s && isValidTime(s.time)) ? s : null);
+    // 【修正】starScoresにも異常値ガードを追加（★はtime=残り秒数なので0も許容）
+    const isValidStar = s => s && typeof s.score === 'number' && isFinite(s.score)
+                          && typeof s.time === 'number' && isFinite(s.time) && s.time >= 0 && s.time <= 3600;
+    starScores = starScores.map(s => isValidStar(s) ? s : null);
+
+    // 【追加】名前の復元と検証（文字列以外や長すぎる名前を無害化）
+    const cleanName = n => (typeof n === 'string' ? n.trim().slice(0, 12) : '');
+    normalScores = normalScores.map(s => s ? { ...s, name: cleanName(s.name) } : null);
+    starScores   = starScores.map(s => s ? { ...s, name: cleanName(s.name) } : null);
+    if (typeof data.lastPlayerName === 'string') lastPlayerName = cleanName(data.lastPlayerName);
   } catch(e) {
     console.warn('読み込み失敗:', e);
   }
@@ -692,8 +720,17 @@ function clearProgress() {
   starScores          = Array(10).fill(null);
   levelStarClearTimes = Array(10).fill(null);
   starLevelCleared    = Array(10).fill(false);
+  starUnlockedThisSession = Array(10).fill(false);
   allClearFlag        = false;
+  lastPlayerName      = '';
   updateStarSelectUI();
+  // 【修正】オールクリア表示を消し、★レベル選択中なら通常レベルに戻す
+  document.getElementById('all-clear-message').style.display = "none";
+  const sel = document.getElementById("patternsel");
+  if (sel.value.endsWith("star")) {
+    sel.value = sel.value[0];
+    changePattern();
+  }
   alert('セーブデータを削除しました。');
 }
 
@@ -872,9 +909,11 @@ function enableStartBtn(){
 }
 function updateStarSelectUI(){
   var sel = document.getElementById("patternsel");
+  // 【仕様】★は「このセッションで自分が通常レベルをクリアした場合」のみ選択可。
+  // リロードすると再ロックされるので、通常レベルをクリアし直す必要がある。
   for(let i=0;i<levelStarClearTimes.length;i++){
-    if(levelStarClearTimes[i]!==null)
-      sel.querySelector(`option[value="${i}star"]`).disabled = false;
+    const unlocked = starUnlockedThisSession[i] && levelStarClearTimes[i] !== null;
+    sel.querySelector(`option[value="${i}star"]`).disabled = !unlocked;
   }
 }
 function resetBlocks(){
@@ -892,6 +931,7 @@ function resetBlocks(){
     })
   );
   activeBlock=0;
+  updateBlockSel();
   blockDropPos=0;
   renderBlocks();
   resetTimer();
@@ -931,6 +971,7 @@ function randomizeBlocks(skipReset) {
     return obj;
   });
   activeBlock=0;
+  updateBlockSel();
   renderBlocks();
   if(!skipReset) resetTimer();  // ★モードのstartGame内では呼ばない
   enableStartBtn();
@@ -947,6 +988,10 @@ function updateBlockSel(){
     op.textContent = "ブロック"+(i+1);
     sel.appendChild(op);
   }
+  // 【修正】プルダウンの表示を現在の選択ブロックと同期させる
+  // （Tabや数字キーで切り替えても表示が「ブロック1」に戻ってしまうバグ対策）
+  if(activeBlock >= blockDefs.length) activeBlock = 0;
+  sel.value = String(activeBlock);
 }
 
 // ========== 重要: 分かりやすい回転関数 ==========
@@ -1042,7 +1087,8 @@ function renderBlocks(){
       });
       let drop = isStarLevel ? blockDropPos : 0;
       let y = p[1]+b.pos[1]+0.5 + yOffset - drop;
-      cube=new THREE.Mesh(geom,mat);
+      // 【修正】暗黙のグローバル変数を修正（const追加）
+      const cube=new THREE.Mesh(geom,mat);
       cube.position.set(p[0]+b.pos[0]+0.5, y, p[2]+b.pos[2]+0.5);
       group.add(cube);
       if(isStarLevel) minY = Math.min(minY, y-0.5);
@@ -1081,14 +1127,48 @@ function renderBlocks(){
       stars     = starsText(result.stars);
       document.getElementById("message").textContent = `完成！ ${t.toFixed(1)}秒 ${result.score}点`;
 
-      if(Number.isInteger(pidx) && levelStarClearTimes[pidx] == null && t > 0 && t <= 3600){
+      // 【仕様】通常レベルをクリアした本人だけが★に挑戦できる（このセッション限定で解放）。
+      // 制限時間は初回は自動設定、記録がある場合は更新するかを本人が選択する。
+      // ベスト記録更新時は名前を入力してもらいスコアボードに表示する。
+      if(Number.isInteger(pidx) && t > 0 && t <= 3600){
+        starUnlockedThisSession[pidx] = true;
+        const firstUnlock = (levelStarClearTimes[pidx] == null);
         // 表示と完全一致させるため小数第1位で丸めて保存（異常値のみ除外）
-        levelStarClearTimes[pidx] = parseFloat(t.toFixed(1));
+        const newTime = parseFloat(t.toFixed(1));
+        if(firstUnlock) levelStarClearTimes[pidx] = newTime;
         updateStarSelectUI();
+        // クリア演出が終わってからダイアログをまとめて表示
+        // （prompt/confirmはJSを止めて演出が固まるため、演出後に順番に出す）
         setTimeout(() => {
-          document.getElementById("message").textContent
-            = `完成！ ${t.toFixed(1)}秒　レベル${pidx+1}★ 解放！`;
-        }, 3200);
+          const parts = [];
+          if(firstUnlock) parts.push(`レベル${pidx+1}★ 解放！`);
+          // ①ベスト記録更新なら名前を入力
+          if(isNew){
+            const name = askPlayerName();
+            normalScores[pidx].name = name;
+            saveProgress();
+            parts.push(`ベスト記録：${name}`);
+          }
+          // ②2回目以降のクリアは★制限時間を更新するか本人が選ぶ
+          if(!firstUnlock){
+            const oldTime = levelStarClearTimes[pidx];
+            const doUpdate = confirm(
+              `レベル${pidx+1}★の制限時間を更新しますか？\n` +
+              `現在：${oldTime.toFixed(1)} 秒 → 今回：${newTime.toFixed(1)} 秒`
+            );
+            if(doUpdate){
+              levelStarClearTimes[pidx] = newTime;
+              saveProgress();
+              parts.push(`★制限時間を${newTime.toFixed(1)}秒に更新`);
+            } else {
+              parts.push(`★制限時間は${oldTime.toFixed(1)}秒のまま`);
+            }
+          }
+          if(parts.length){
+            document.getElementById("message").textContent
+              = `完成！ ${t.toFixed(1)}秒　` + parts.join('　');
+          }
+        }, 3300);
       }
       saveProgress();
     } else {
@@ -1105,6 +1185,16 @@ function renderBlocks(){
         starLevelCleared[starLevelIndex] = true;
       }
       saveProgress();
+      // 【追加】★レベルもベスト記録更新なら演出後に名前を登録
+      if(isNew){
+        setTimeout(() => {
+          const name = askPlayerName();
+          starScores[sidx].name = name;
+          saveProgress();
+          document.getElementById("message").textContent
+            = `★完成！ 残り${t.toFixed(1)}秒　ベスト記録：${name}`;
+        }, 3300);
+      }
     }
 
     const isAllClear = handleStageClear();
@@ -1232,9 +1322,13 @@ function showStarTimer(remainSec){
 }
 function startBlockDrop(){
   stopBlockDrop();
-  function dropAnim(){
+  // 【修正】経過時間ベースの落下に変更（120Hz端末などで2倍速になるバグ対策）
+  let lastTime = performance.now();
+  function dropAnim(now){
     if(!timerStarted || !isStarLevel) return;
-    blockDropPos += dropSpeed;
+    const dt = Math.min(0.1, (now - lastTime) / 1000); // タブ復帰時の飛びを抑制
+    lastTime = now;
+    blockDropPos += dropSpeed * dt;
     renderBlocks();
     dropAnimId = requestAnimationFrame(dropAnim);
   }
@@ -1245,8 +1339,9 @@ function stopBlockDrop(){
   dropAnimId = null;
 }
 function changePattern() {
+  // 【修正】allClearFlagは消さない（レベル切替後のセーブでオールクリア記録が消えるバグ対策）
+  // メッセージ表示だけ隠す
   document.getElementById('all-clear-message').style.display="none";
-  allClearFlag = false;
   let idx = document.getElementById("patternsel").value;
   // cubeSizeをレベルに合わせて更新
   if(!idx.toString().includes('star')){
@@ -1301,9 +1396,9 @@ window.addEventListener('keydown', e => {
     case 'k': rotateBlock('y',-1); break;
     case 'u': rotateBlock('z', 1); break;
     case 'o': rotateBlock('z',-1); break;
-    // ブロック選択：1〜6
-    case '1': case '2': case '3':
-    case '4': case '5': case '6':
+    // ブロック選択：1〜7（【修正】レベル10は7ブロックあるため'7'を追加）
+    case '1': case '2': case '3': case '4':
+    case '5': case '6': case '7':
       { const idx = parseInt(e.key) - 1;
         if(idx < blocks.length){ activeBlock = idx; updateBlockSel(); renderBlocks(); }
       } break;
@@ -1436,6 +1531,7 @@ function openScoreboard(){
     row.insertCell().textContent = sn ? `${sn.time.toFixed(1)}秒` : '－';
     row.insertCell().textContent = sn ? `${sn.score}点` : '－';
     row.insertCell().textContent = sn ? starsText(sn.stars) : '－';
+    row.insertCell().textContent = (sn && sn.name) ? sn.name : '－';
 
     const ss = starScores[i];
     const row2 = table.insertRow();
@@ -1443,6 +1539,7 @@ function openScoreboard(){
     row2.insertCell().textContent = ss ? `残り${ss.time.toFixed(1)}秒` : '－';
     row2.insertCell().textContent = ss ? `${ss.score}点` : '－';
     row2.insertCell().textContent = ss ? starsText(ss.stars) : '－';
+    row2.insertCell().textContent = (ss && ss.name) ? ss.name : '－';
   }
 
   // 合計行
@@ -1452,6 +1549,7 @@ function openScoreboard(){
   row.insertCell().textContent = '合計';
   row.insertCell().textContent = '';
   row.insertCell().textContent = `${total}点`;
+  row.insertCell().textContent = '';
   row.insertCell().textContent = '';
 
   document.getElementById('scoreboard').classList.add('show');
