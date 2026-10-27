@@ -2,12 +2,18 @@
 
 ## ファイル構成
 ```
-streamlit_app/
-├── app.py          ← Streamlitアプリ本体
-├── ubongo2.html    ← ゲームファイル
+.
+├── app.py                   ← Streamlitアプリ本体
+├── ubongo3.html             ← ゲームファイル（Streamlitコンポーネントとして読み込み）
+├── tools/check_patterns.py  ← 問題データの検証（python3 tools/check_patterns.py）
 ├── requirements.txt
 └── README.md
 ```
+
+## ランキングの仕組み
+- ゲームをクリアするとスコアが自動でStreamlitに送られ、右側のランキングに登録されます
+- ランキングは全プレイヤー共通ですが、サーバーのメモリ上に保持しているため再起動で消えます
+  （永続化するには下記のSupabase連携が必要です）
 
 ## ローカルで起動する方法
 ```bash
@@ -39,7 +45,7 @@ streamlit run app.py
      created_at timestamp default now()
    );
    ```
-3. app.pyのSupabase接続コードを有効化
+3. app.pyの `add_score` / `get_scores` をSupabaseへの保存・取得に置き換える
 4. Streamlit CloudのSecretsに以下を追加：
    ```toml
    SUPABASE_URL = "https://xxxx.supabase.co"
