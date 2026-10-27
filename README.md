@@ -12,12 +12,14 @@
 
 ## ランキングの仕組み
 - ゲームをクリアするとスコアが自動でStreamlitに送られ、右側のランキングに登録されます
-- ランキングは全プレイヤー共通ですが、サーバーのメモリ上に保持しているため再起動で消えます
-  （永続化するには下記のSupabase連携が必要です）
+- ランキングは全プレイヤー共通です
+- Supabaseを設定すると記録はデータベースに保存され、アプリが再起動しても消えません
+- Supabaseを設定していない場合はサーバーのメモリ上に保持するため、再起動
+  （GitHubへのpush・スリープ・Reboot など）で消えます
 
 ## ローカルで起動する方法
 ```bash
-pip install streamlit
+pip install -r requirements.txt
 streamlit run app.py
 ```
 
@@ -29,25 +31,37 @@ streamlit run app.py
 4. 「New app」→ リポジトリ・ブランチ・app.pyを選択
 5. 「Deploy」ボタンを押すだけ
 
-## 次のステップ：Supabaseでオンラインランキング
+## Supabaseでランキングを保存する
 
 1. https://supabase.com でプロジェクト作成（無料）
-2. 以下のテーブルを作成：
+2. 左メニューの「SQL Editor」で以下を実行してテーブルを作成：
    ```sql
    create table scores (
-     id serial primary key,
-     name text not null,
-     level int not null,
-     time float not null,
-     score int not null,
-     stars text,
-     is_star_level boolean default false,
-     created_at timestamp default now()
+     id bigserial primary key,
+     name text not null check (char_length(name) between 1 and 16),
+     level int not null check (level between 1 and 10),
+     time real not null check (time >= 0 and time <= 3600),
+     score int not null check (score between 0 and 1000),
+     stars text not null check (char_length(stars) <= 5),
+     is_star_level boolean not null default false,
+     created_at timestamptz not null default now()
    );
+   create index scores_rank_idx on scores (level, is_star_level, score desc);
+
+   -- アプリ（anon / publishable キー）からは「読む」と「追加する」だけを許可する
+   alter table scores enable row level security;
+   create policy "scores are readable" on scores for select to anon using (true);
+   create policy "scores can be added" on scores for insert to anon with check (true);
    ```
-3. app.pyの `add_score` / `get_scores` をSupabaseへの保存・取得に置き換える
-4. Streamlit CloudのSecretsに以下を追加：
+   ※ 以前のREADMEの手順で `scores` テーブルを作成済みの場合は、
+   最後の `alter table` と `create policy` の3行だけ実行すれば使えます
+3. 「Project Settings」→「API Keys」で、Project URL と anon（または publishable）キーを確認
+4. Streamlit Cloud のアプリ画面「Settings」→「Secrets」に以下を貼り付けて保存：
    ```toml
    SUPABASE_URL = "https://xxxx.supabase.co"
    SUPABASE_KEY = "your-anon-key"
    ```
+   ローカルで試す場合は同じ内容を `.streamlit/secrets.toml` に書きます（gitには含めません）。
+   service_role / secret キーは全権限を持つので使わないでください。
+
+設定すると `app.py` の `add_score` / `get_scores` が自動的にSupabaseを使うようになります。

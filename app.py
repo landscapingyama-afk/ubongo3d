@@ -2,9 +2,9 @@ import streamlit as st
 import streamlit.components.v1 as components
 import html
 import os
+import requests
 import tempfile
 import threading
-from datetime import datetime
 
 st.set_page_config(
     page_title="ウボンゴ3D オンライン",
@@ -54,26 +54,88 @@ def load_game_component():
 
     return components.declare_component("ubongo3d_game", path=component_dir)
 
-# ===== 全プレイヤー共通のランキング（サーバー起動中のみ保持） =====
+# ===== ランキングの保存先 =====
+# Secrets に SUPABASE_URL / SUPABASE_KEY があれば Supabase に保存する（再起動しても消えない）。
+# 設定がなければサーバーのメモリに保存する（全員で共有されるが再起動で消える）。
+SCORE_COLUMNS = "name,level,time,score,stars,is_star_level,created_at"
+
+def get_supabase_config():
+    try:
+        url = st.secrets["SUPABASE_URL"]
+        key = st.secrets["SUPABASE_KEY"]
+    except Exception:
+        return None
+    if not url or not key:
+        return None
+    return url.rstrip("/"), key
+
+def supabase_headers(key):
+    headers = {"apikey": key, "Content-Type": "application/json"}
+    # 旧形式の anon key（JWT）は Authorization にも必要。新形式の sb_publishable_ キーは apikey だけでよい
+    if not key.startswith("sb_"):
+        headers["Authorization"] = f"Bearer {key}"
+    return headers
+
+@st.cache_data(ttl=15, show_spinner=False)
+def fetch_supabase_scores(url, key, level, is_star_level, limit):
+    params = {"select": SCORE_COLUMNS, "order": "score.desc,created_at.asc", "limit": limit}
+    if level is not None:
+        params["level"] = f"eq.{level}"
+        params["is_star_level"] = f"eq.{str(is_star_level).lower()}"
+    res = requests.get(f"{url}/rest/v1/scores", headers=supabase_headers(key), params=params, timeout=5)
+    res.raise_for_status()
+    return res.json()
+
 @st.cache_resource
 def get_ranking_store():
     return {"lock": threading.Lock(), "scores": []}
 
 def add_score(entry):
+    """スコアを登録する。失敗したらエラーメッセージを返す。"""
+    config = get_supabase_config()
+    if config:
+        url, key = config
+        row = {k: entry[k] for k in ("name", "level", "time", "score", "stars", "is_star_level")}
+        headers = {**supabase_headers(key), "Prefer": "return=minimal"}
+        try:
+            res = requests.post(f"{url}/rest/v1/scores", headers=headers, json=row, timeout=5)
+            res.raise_for_status()
+        except requests.RequestException as e:
+            print(f"Supabase insert failed: {e}")
+            return "スコアの保存に失敗しました。時間をおいてもう一度お試しください。"
+        fetch_supabase_scores.clear()  # 登録した記録がすぐランキングに出るようにする
+        return None
+
     store = get_ranking_store()
     with store["lock"]:
         store["scores"].append(entry)
         if len(store["scores"]) > MAX_SCORES:
             store["scores"].sort(key=lambda x: -x["score"])
             del store["scores"][MAX_SCORES:]
+    return None
 
-def get_scores():
+def get_scores(level=None, is_star_level=False, limit=10):
+    """スコア上位を返す。level=None なら全レベル。戻り値は (スコア一覧, エラーメッセージ)。"""
+    config = get_supabase_config()
+    if config:
+        url, key = config
+        try:
+            return fetch_supabase_scores(url, key, level, is_star_level, limit), None
+        except requests.RequestException as e:
+            print(f"Supabase select failed: {e}")
+            return [], "ランキングの取得に失敗しました。時間をおいてもう一度お試しください。"
+
     store = get_ranking_store()
     with store["lock"]:
-        return list(store["scores"])
+        scores = list(store["scores"])
+    if level is not None:
+        scores = [s for s in scores if s["level"] == level and s["is_star_level"] == is_star_level]
+    return sorted(scores, key=lambda x: -x["score"])[:limit], None
 
 def level_label(s):
     return f"Lv{s['level']}{'★' if s.get('is_star_level') else ''}"
+
+LEVEL_OPTIONS = ["全て"] + [f"Lv{lv}{star}" for lv in range(1, 11) for star in ("", "★")]
 
 # ===== セッション初期化 =====
 if "player_name" not in st.session_state:
@@ -133,39 +195,37 @@ with col_game:
                     "time": float(result["time"]),
                     "score": int(result["score"]),
                     "stars": str(result["stars"])[:5],
-                    "is_star_level": bool(result.get("isStarLevel")),
-                    "ts": datetime.now().strftime("%H:%M")
+                    "is_star_level": bool(result.get("isStarLevel"))
                 }
             except (KeyError, TypeError, ValueError):
                 entry = None
             if entry:
-                add_score(entry)
-                st.session_state.last_score = entry
+                error = add_score(entry)
+                if error:
+                    st.warning(error)
+                else:
+                    st.session_state.last_score = entry
 
 with col_rank:
     st.markdown("### 🏆 ランキング")
 
-    all_scores = get_scores()
-    if not all_scores:
+    level_filter = st.selectbox("レベル", LEVEL_OPTIONS, key="level_filter")
+    if level_filter == "全て":
+        scores, error = get_scores()
+    else:
+        scores, error = get_scores(
+            level=int(level_filter[2:].rstrip("★")),
+            is_star_level=level_filter.endswith("★")
+        )
+
+    if error:
+        st.warning(error)
+    elif not scores:
         st.markdown("*まだ記録がありません*")
     else:
-        # レベル別フィルター（通常 → ★ の順）
-        labels = sorted(
-            set(level_label(s) for s in all_scores),
-            key=lambda l: (int(l[2:].rstrip("★")), l.endswith("★"))
-        )
-        level_filter = st.selectbox("レベル", ["全て"] + labels, key="level_filter")
-
-        scores = all_scores
-        if level_filter != "全て":
-            scores = [s for s in scores if level_label(s) == level_filter]
-
-        # スコア上位順にソート
-        scores_sorted = sorted(scores, key=lambda x: -x["score"])[:10]
-
         medals = ["🥇", "🥈", "🥉"]
         rows = ""
-        for i, s in enumerate(scores_sorted):
+        for i, s in enumerate(scores):
             medal = medals[i] if i < 3 else f"{i+1}"
             time_text = f"残り{s['time']:.1f}秒" if s.get("is_star_level") else f"{s['time']:.1f}秒"
             rows += f"""<tr>
