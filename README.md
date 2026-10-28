@@ -65,3 +65,16 @@ streamlit run app.py
    service_role / secret キーは全権限を持つので使わないでください。
 
 設定すると `app.py` の `add_score` / `get_scores` が自動的にSupabaseを使うようになります。
+
+## Supabaseの自動停止を防ぐ（GitHub Actions）
+
+Supabaseの無料プランは7日間アクセスがないとプロジェクトが一時停止します。
+`.github/workflows/supabase-keepalive.yml` が毎週月・木にランキングを1件読み込んで停止を防ぎます。
+
+1. GitHubのリポジトリ画面「Settings」→「Secrets and variables」→「Actions」→「New repository secret」で
+   `SUPABASE_URL` と `SUPABASE_KEY` を登録（Streamlit の Secrets と同じ値）
+2. 「Actions」タブ →「Supabase keep-alive」→「Run workflow」で手動実行し、緑のチェックになることを確認
+
+※ 定期実行はデフォルトブランチ（main）にこのファイルがあるときだけ動きます。
+※ リポジトリに長期間（約60日）更新がないと、GitHubが定期実行を自動で止めることがあります。
+  その場合は届いたメールか「Actions」タブから再度有効にしてください。

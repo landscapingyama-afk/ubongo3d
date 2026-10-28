@@ -1,0 +1,34 @@
+# Supabase の無料プランは7日間アクセスがないと一時停止するため、
+# 週2回（月・木）ランキングを1件だけ読み込んで停止を防ぐ。
+# 必要な設定: リポジトリの Settings → Secrets and variables → Actions に
+#   SUPABASE_URL / SUPABASE_KEY（Streamlit の Secrets と同じ値）を登録する。
+name: Supabase keep-alive
+
+on:
+  schedule:
+    - cron: "17 3 * * 1,4"  # 毎週月・木 12:17（日本時間）
+  workflow_dispatch:         # Actions 画面から手動実行もできる
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read one row from the scores table
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
+            echo "::error::Secrets の SUPABASE_URL / SUPABASE_KEY が設定されていません"
+            exit 1
+          fi
+          headers=(-H "apikey: $SUPABASE_KEY")
+          # 旧形式の anon key（JWT）は Authorization にも必要。sb_publishable_ キーは apikey だけでよい
+          case "$SUPABASE_KEY" in
+            sb_*) ;;
+            *) headers+=(-H "Authorization: Bearer $SUPABASE_KEY") ;;
+          esac
+          curl --fail-with-body -sS --max-time 30 "${headers[@]}" \
+            "${SUPABASE_URL%/}/rest/v1/scores?select=id&limit=1"
+          echo
+          echo "Supabase にアクセスしました"
