@@ -1,18 +1,17 @@
 # Supabase の無料プランは7日間アクセスがないと一時停止するため、
-# 週2回（月・木）ランキングを1件だけ読み込んで停止を防ぐ。
+# 毎日ランキングを1件だけ読み込んで停止を防ぐ（週2回では足りずに停止したため毎日にしている）。
 # 必要な設定: リポジトリの Settings → Secrets and variables → Actions に
 #   SUPABASE_URL / SUPABASE_KEY（Streamlit の Secrets と同じ値）を登録する。
 name: Supabase keep-alive
 
 on:
   schedule:
-    - cron: "17 3 * * 1,4"  # 毎週月・木 12:17（日本時間）
+    - cron: "17 3 * * *"  # 毎日 12:17（日本時間）
   workflow_dispatch:         # Actions 画面から手動実行もできる
 
 jobs:
   ping:
-    # ubuntu-latest（Ubuntu 26.04）では supabase.co の名前解決に失敗したため 24.04 に固定
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
       - name: Read one row from the scores table
         env:

@@ -69,7 +69,8 @@ streamlit run app.py
 ## Supabaseの自動停止を防ぐ（GitHub Actions）
 
 Supabaseの無料プランは7日間アクセスがないとプロジェクトが一時停止します。
-`.github/workflows/supabase-keepalive.yml` が毎週月・木にランキングを1件読み込んで停止を防ぎます。
+`.github/workflows/supabase-keepalive.yml` が毎日ランキングを1件読み込んで停止を防ぎます。
+（週2回では「アクセスが少ない」と判定されて停止したため、毎日にしています）
 
 1. GitHubのリポジトリ画面「Settings」→「Secrets and variables」→「Actions」→「New repository secret」で
    `SUPABASE_URL` と `SUPABASE_KEY` を登録（Streamlit の Secrets と同じ値）
